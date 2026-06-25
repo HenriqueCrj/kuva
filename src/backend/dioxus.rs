@@ -76,6 +76,13 @@
 //! `svg.rs`, which treats `GroupEnd` and `ClipEnd` interchangeably as "close the
 //! current wrapper" (both just emit `</g>` and pop one nesting level).
 
+// This module's public docs deliberately cross-link its private helpers
+// (`fold_scene`, `Node`, `fmt_float`, …) because those links explain the
+// architecture to anyone reading the source — the private fold/format helpers
+// are the whole point of several doc comments. Allow the otherwise-correct
+// rustdoc lint module-locally rather than downgrade the links to code spans.
+#![allow(rustdoc::private_intra_doc_links)]
+
 use std::collections::HashSet;
 
 use dioxus::prelude::*;

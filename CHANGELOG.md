@@ -9,7 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Native Dioxus (RSX) backend** — a new optional `KuvaDioxus` backend (feature `dioxus`, off by default) that serializes a `Scene` to a typed `dioxus::Element` tree instead of an SVG string, so a Dioxus 0.7 app can render a kuva plot through the real VDOM (fine-grained diffing, no `dangerous_inner_html` for the chart body — only the `<defs>` gradient/marker/clip-path island, which has no typed-node form) with signals and CSS reachable. A new *sibling* serializer over `&Scene` alongside `svg`/`terminal` — it touches no plot, layout, or projection code, and its float/color/text formatting mirrors `SvgBackend` so output stays visually identical. Maps every `Primitive` variant, folds the flat `Group`/`Clip` marker stream into a nested node tree, and emits `Scene.defs` (gradients/markers/clip-paths) as the single `<defs>` island. Adds responsive `viewBox` sizing (`KuvaDioxus::with_class`), optional theming (`Background` / `TextColor`), a reactive `KuvaPlot` component, and native, signal-driven interactivity (hover tooltips, legend toggle, coordinate readout, click-to-pin) that replaces the injected interactivity JS — keeping the wasm dep surface to `dioxus` (`macro`/`html`/`signals`) only. The `dioxus` feature never pulls a native-only dep (`fontdue`/`png`/`flate2`/`svg2pdf`/`clap`/`arrow`); a CI job guards the `wasm32-unknown-unknown` build against any leak. See *Reference → Dioxus Backend*.
+- **Native Dioxus (RSX) backend** (`dioxus` feature, off by default) — a new
+  `KuvaDioxus` serializer that maps a `Scene` to a typed `dioxus::Element` tree
+  instead of an SVG string, so a Dioxus 0.7 app renders a kuva plot through the
+  real VDOM. A sibling of the `svg`/`terminal` backends: no shared trait, no
+  changes to plot/layout/projection code, and formatting mirrors `SvgBackend`
+  so output stays visually identical.
+  - Responsive `viewBox` sizing (`KuvaDioxus::with_class`) and optional theming
+    (`Background` / `TextColor`).
+  - Reactive `KuvaPlot` component plus signal-driven interactivity (hover
+    tooltip, click-to-pin, legend toggle, coordinate readout) replacing the
+    injected interactivity JS — no Dioxus `hooks` feature required.
+  - `dangerous_inner_html` is confined to the `<defs>` island; the wasm dep
+    surface stays at `dioxus` (`macro`/`html`/`signals`) and a CI job guards the
+    `wasm32-unknown-unknown` build against any native-dep leak.
+  - See *Reference → Dioxus Backend*.
 
 ## [0.3.0] — 2026-06-19
 

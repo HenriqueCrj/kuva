@@ -83,6 +83,10 @@ By default the backend is at parity with the SVG backend: it emits the
 colors instead, remap them:
 
 ```rust,ignore
+// `Background` / `TextColor` aren't in the prelude (the bare names collide too
+// easily with a host app's own types); import them from the crate root.
+use kuva::{Background, TextColor};
+
 KuvaDioxus::new()
     .with_background(Background::None)        // host surface shows through
     .with_text_color(TextColor::Token("currentColor".into()));
