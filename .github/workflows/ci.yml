@@ -37,6 +37,14 @@ jobs:
           mkdir -p test_outputs smoke_test_outputs
           cargo ci-test
 
+      # The dioxus backend is feature-gated, so `ci-test` (cli,full) never
+      # compiles it. Its parity tests are host-runnable (rsx! compiles for the
+      # host target), so run them here to guard the Scene -> Element mapping.
+      # `--lib` scopes to the unit tests: the integration tests under tests/
+      # need the `cli` feature, which this minimal feature set deliberately omits.
+      - name: Test (dioxus backend)
+        run: cargo test --lib --no-default-features --features dioxus
+
 
   clippy:
     name: Clippy
@@ -48,3 +56,33 @@ jobs:
 
       - name: Clippy (CLI + all backends)
         run: cargo ci-clippy
+
+      # Lint the feature-gated dioxus backend too (cli,full excludes it).
+      - name: Clippy (dioxus backend)
+        run: cargo clippy --no-default-features --features dioxus -- -D warnings
+
+  wasm:
+    name: WASM (dioxus backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Guards the native Dioxus `Scene -> Element` backend: it must keep
+      # compiling for the browser target with only the `dioxus` feature.
+      - name: Build dioxus backend for wasm32-unknown-unknown
+        run: cargo build --target wasm32-unknown-unknown --no-default-features --features dioxus
+
+      # The `dioxus` feature must never drag a native-only dep into the wasm
+      # lib build (these are gated behind png/pdf/cli/parquet, not dioxus).
+      - name: Assert no native-dep leak into the wasm build
+        run: |
+          leak=$(cargo tree --target wasm32-unknown-unknown --no-default-features --features dioxus --edges normal \
+            | grep -iE 'fontdue|png|flate2|svg2pdf|clap|arrow' || true)
+          if [ -n "$leak" ]; then
+            echo "Native dep leaked into the wasm dioxus build:"; echo "$leak"; exit 1
+          fi

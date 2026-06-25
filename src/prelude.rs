@@ -210,3 +210,8 @@ pub use crate::backend::png::PngBackend;
 
 #[cfg(feature = "pdf")]
 pub use crate::backend::pdf::PdfBackend;
+
+#[cfg(feature = "dioxus")]
+pub use crate::backend::dioxus::{
+    scene_from_plots, Background, KuvaDioxus, KuvaPlot, KuvaTooltip, TextColor, Tooltip,
+};

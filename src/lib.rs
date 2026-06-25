@@ -75,6 +75,11 @@ pub use backend::raster::RasterBackend;
 #[cfg(feature = "pdf")]
 pub use backend::pdf::PdfBackend;
 
+#[cfg(feature = "dioxus")]
+pub use backend::dioxus::{
+    scene_from_plots, Background, KuvaDioxus, KuvaPlot, KuvaTooltip, TextColor, Tooltip,
+};
+
 pub use render::datetime::{ymd, ymd_hms, DateTimeAxis, DateUnit};
 /// KDE bandwidth via Silverman's rule of thumb: `h = 1.06 σ n^{-1/5}`.
 ///
