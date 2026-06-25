@@ -1,3 +1,5 @@
+#[cfg(feature = "dioxus")]
+pub mod dioxus;
 pub mod interactive_js;
 pub mod svg;
 pub mod terminal;

@@ -210,3 +210,11 @@ pub use crate::backend::png::PngBackend;
 
 #[cfg(feature = "pdf")]
 pub use crate::backend::pdf::PdfBackend;
+
+// `Background` / `TextColor` / `Tooltip` are intentionally NOT in the prelude:
+// those bare nouns collide too easily with a host Dioxus app's own types on a
+// glob import. Reach for them via `kuva::{Background, TextColor, Tooltip}` (they
+// are re-exported from the crate root). The `Kuva*`-prefixed items are safe to
+// glob, so they stay here.
+#[cfg(feature = "dioxus")]
+pub use crate::backend::dioxus::{scene_from_plots, KuvaDioxus, KuvaPlot, KuvaTooltip};

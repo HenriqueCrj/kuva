@@ -31,6 +31,7 @@
 //! |--------------|-------------|
 //! | `png`        | Enables [`RasterBackend`] (direct pixel-buffer rasteriser) and the [`PngBackend`] compatibility shim. |
 //! | `pdf`        | Enables [`PdfBackend`] for vector PDF output via `svg2pdf`. |
+//! | `dioxus`     | Enables [`KuvaDioxus`] — a native backend that serializes a `Scene` to a typed `dioxus::Element` (RSX) tree for Dioxus 0.7 apps. Off by default; pulls only `dioxus` (no web/desktop renderer). See *Reference → Dioxus Backend*. |
 //! | `embed_font` | Enables [`backend::svg::SvgBackend::with_embedded_font`] — bakes DejaVu Sans into the SVG as a base64 `@font-face`. Adds `flate2` as a dependency but does **not** pull in `png` or `pdf`. |
 //! | `cli`        | Enables the `kuva` CLI binary (pulls in `clap`). |
 //! | `full`       | Enables `embed_font` + `png` + `pdf`. |
@@ -74,6 +75,11 @@ pub use backend::raster::RasterBackend;
 
 #[cfg(feature = "pdf")]
 pub use backend::pdf::PdfBackend;
+
+#[cfg(feature = "dioxus")]
+pub use backend::dioxus::{
+    scene_from_plots, Background, KuvaDioxus, KuvaPlot, KuvaTooltip, TextColor, Tooltip,
+};
 
 pub use render::datetime::{ymd, ymd_hms, DateTimeAxis, DateUnit};
 /// KDE bandwidth via Silverman's rule of thumb: `h = 1.06 σ n^{-1/5}`.

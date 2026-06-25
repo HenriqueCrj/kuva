@@ -139,6 +139,7 @@
 - [Themes](./reference/themes.md)
 - [Color Palettes](./reference/palettes.md)
 - [SVG Interactivity](./reference/interactive.md)
+- [Dioxus Backend](./reference/dioxus.md)
 - [Date & Time Axes](./reference/datetime.md)
 - [Stats Box](./reference/stats_box.md)
 - [Math in Labels](./reference/math.md)

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Native Dioxus (RSX) backend** (`dioxus` feature, off by default) — a new
+  `KuvaDioxus` serializer that maps a `Scene` to a typed `dioxus::Element` tree
+  instead of an SVG string, so a Dioxus 0.7 app renders a kuva plot through the
+  real VDOM. A sibling of the `svg`/`terminal` backends: no shared trait, no
+  changes to plot/layout/projection code, and formatting mirrors `SvgBackend`
+  so output stays visually identical.
+  - Responsive `viewBox` sizing (`KuvaDioxus::with_class`) and optional theming
+    (`Background` / `TextColor`).
+  - Reactive `KuvaPlot` component plus signal-driven interactivity (hover
+    tooltip, click-to-pin, legend toggle, coordinate readout) replacing the
+    injected interactivity JS — no Dioxus `hooks` feature required.
+  - `dangerous_inner_html` is confined to the `<defs>` island; the wasm dep
+    surface stays at `dioxus` (`macro`/`html`/`signals`) and a CI job guards the
+    `wasm32-unknown-unknown` build against any native-dep leak.
+  - See *Reference → Dioxus Backend*.
+
 ## [0.3.0] — 2026-06-19
 
 ### Added
