@@ -147,3 +147,5 @@ std::fs::write("figure_with_text.svg", svg).unwrap();
 | `.with_border(css, width)` | none | Border color and stroke width |
 | `.with_align(TextAlign)` | `Left` | Text alignment: `Left`, `Center`, or `Right` |
 | `.with_text_color(css)` | theme default | Text color |
+
+**See also:** [Legend Plot](./legend.md) for another pixel-space annotation overlay.

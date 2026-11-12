@@ -203,3 +203,15 @@ let ts = SystemTime::now()
     .unwrap()
     .as_secs_f64();
 ```
+
+---
+
+## From the CLI
+
+`kuva scatter` and `kuva line` accept `--x-date-format <FMT>` to parse the X column as a date/time directly from a TSV/CSV file, instead of converting to timestamps beforehand:
+
+```bash
+kuva line prices.tsv --x date --y close --x-date-format "%Y-%m-%d"
+```
+
+See [CLI → Date/time X axis](../cli/index.md#datetime-x-axis-scatter-line) for the full flag reference (tick unit, tick format, and tick step overrides).

@@ -1,4 +1,4 @@
-//! Full-featured showcase of all 62 kuva plot types.
+//! Full-featured showcase of all 64 kuva plot types.
 //! Each cell uses a larger dataset and includes a title, axis labels,
 //! and a legend where applicable.
 //!
@@ -10,15 +10,16 @@
 use kuva::backend::svg::SvgBackend;
 use kuva::plot::brick::BrickTemplate;
 use kuva::plot::{
-    BarPlot, BoxPlot, BrickPlot, BumpPlot, CalendarPlot, CandlestickPlot, ChordPlot, Clustermap,
-    ContourPlot, DensityPlot, DicePlot, DotPlot, EcdfPlot, ForestPlot, FunnelPlot, GanttPlot,
-    Heatmap, HexbinPlot, Histogram, Histogram2D, HorizonPlot, JointPlot, LinePlot, LollipopPlot,
-    ManhattanPlot, MosaicPlot, NetworkPlot, ParallelPlot, PhyloTree, PieLabelPosition, PiePlot,
-    PolarMode, PolarPlot, PopulationPyramid, PrGroup, PrPlot, QQPlot, QuiverPlot, RadarPlot,
-    RaincloudPlot, RidgelinePlot, RocGroup, RocPlot, RosePlot, SankeyPlot, Scatter3DPlot,
-    ScatterPlot, SeriesPlot, SlopePlot, StackedAreaPlot, StreamgraphPlot, StripPlot, SunburstPlot,
-    Surface3DPlot, SurvivalPlot, SyntenyPlot, TernaryPlot, TextPlot, TreemapNode, TreemapPlot,
-    UpSetPlot, VennPlot, ViolinPlot, VolcanoPlot, WafflePlot, WaterfallPlot,
+    BandPlot, BarPlot, BoxPlot, BrickPlot, BumpPlot, CalendarPlot, CandlestickPlot, ChordPlot,
+    Clustermap, ContourPlot, DensityPlot, DicePlot, DotPlot, EcdfPlot, ForestPlot, FunnelPlot,
+    GanttPlot, Heatmap, HexbinPlot, Histogram, Histogram2D, HorizonPlot, JointPlot, LegendEntry,
+    LegendPlot, LegendShape, LinePlot, LollipopPlot, ManhattanPlot, MosaicPlot, NetworkPlot,
+    ParallelPlot, ParetoPlot, PhyloTree, PieLabelPosition, PiePlot, PolarMode, PolarPlot,
+    PopulationPyramid, PrGroup, PrPlot, QQPlot, QuiverPlot, RadarPlot, RaincloudPlot,
+    RidgelinePlot, RocGroup, RocPlot, RosePlot, SankeyPlot, Scatter3DPlot, ScatterPlot, SeriesPlot,
+    SlopePlot, StackedAreaPlot, StreamgraphPlot, StripPlot, SunburstPlot, Surface3DPlot,
+    SurvivalPlot, SyntenyPlot, TernaryPlot, TextPlot, TreemapNode, TreemapPlot, UpSetPlot,
+    VennPlot, ViolinPlot, VolcanoPlot, WafflePlot, WaterfallPlot,
 };
 use kuva::render::figure::Figure;
 use kuva::render::layout::Layout;
@@ -339,7 +340,8 @@ fn main() {
         .with_line_point_style()
         .with_legend("product");
 
-    // ── Row 2: Band ────────────────────────────────────────────────────────
+    // ── Row 2: LinePlot with an inline confidence band (LinePlot::with_band —
+    // distinct from the standalone BandPlot/Plot::Band cell in row 10) ───────
     let band_x: Vec<f64> = (0..50).map(|i| i as f64 * 0.2).collect();
     let band_y: Vec<f64> = band_x.iter().map(|&x| x.sin()).collect();
     let band_lo: Vec<f64> = band_y.iter().map(|&y| y - 0.4).collect();
@@ -1182,40 +1184,60 @@ fn main() {
         QuiverPlot::from_function((-3.0, 3.0, 8), (-3.0, 3.0, 8), |x, y| (-y * 0.3, x * 0.3))
             .with_color("steelblue");
 
-    let (bar_h, box_h, violin_h, raincloud_h) = {
-        let simple_groups: Vec<(&str, Vec<f64>)> = group_data
-            .iter()
-            .take(3)
-            .map(|(l, d)| (*l, d.clone()))
-            .collect();
+    let bar_h = BarPlot::new()
+        .with_group("Control", vec![(5.2_f64, "steelblue")])
+        .with_group("Low", vec![(6.8_f64, "steelblue")])
+        .with_group("High", vec![(8.1_f64, "steelblue")])
+        .with_horizontal(true);
 
-        let bar_h = BarPlot::new()
-            .with_group("Control", vec![(5.2_f64, "steelblue")])
-            .with_group("Low", vec![(6.8_f64, "steelblue")])
-            .with_group("High", vec![(8.1_f64, "steelblue")])
-            .with_horizontal(true);
+    // Pareto — bars sorted descending plus a cumulative-percentage line.
+    let pareto = ParetoPlot::new()
+        .with_categories(vec![
+            ("Missing field", 42.0),
+            ("Typo", 31.0),
+            ("Timeout", 18.0),
+            ("Bad format", 12.0),
+            ("Other", 9.0),
+        ])
+        .with_cumulative_labels(true);
 
-        let box_h = simple_groups
-            .iter()
-            .fold(BoxPlot::new(), |b, (lbl, v)| b.with_group(*lbl, v.clone()))
-            .with_horizontal(true);
+    // BandPlot — standalone confidence ribbon, paired with a line (band drawn
+    // first so it renders behind it). Distinct from row 2's LinePlot::with_band,
+    // which is a different, inline-band convenience on LinePlot itself.
+    let ribbon_x: Vec<f64> = (0..60).map(|i| i as f64 * 0.2).collect();
+    let ribbon_y: Vec<f64> = ribbon_x.iter().map(|&v| v.sin()).collect();
+    let ribbon_lo: Vec<f64> = ribbon_y.iter().map(|&v| v - 0.35).collect();
+    let ribbon_hi: Vec<f64> = ribbon_y.iter().map(|&v| v + 0.35).collect();
+    let ribbon_band = BandPlot::new(ribbon_x.clone(), ribbon_lo, ribbon_hi)
+        .with_color("steelblue")
+        .with_opacity(0.25)
+        .with_legend("95% CI");
+    let ribbon_line = LinePlot::new()
+        .with_data(ribbon_x.iter().copied().zip(ribbon_y.iter().copied()))
+        .with_color("steelblue")
+        .with_legend("Mean");
 
-        let violin_h = simple_groups
-            .iter()
-            .fold(ViolinPlot::new(), |v, (lbl, d)| {
-                v.with_group(*lbl, d.clone())
-            })
-            .with_horizontal(true);
-
-        let raincloud_h = simple_groups
-            .iter()
-            .fold(RaincloudPlot::new(), |r, (lbl, d)| {
-                r.with_group(*lbl, d.clone())
-            })
-            .with_horizontal(true);
-
-        (bar_h, box_h, violin_h, raincloud_h)
-    };
+    // LegendPlot — standalone legend key, no paired data plot.
+    let legend = LegendPlot::new()
+        .with_title("Groups")
+        .with_entry(LegendEntry {
+            label: "Control".to_string(),
+            color: "steelblue".to_string(),
+            shape: LegendShape::Rect,
+            dasharray: None,
+        })
+        .with_entry(LegendEntry {
+            label: "Low dose".to_string(),
+            color: "tomato".to_string(),
+            shape: LegendShape::Rect,
+            dasharray: None,
+        })
+        .with_entry(LegendEntry {
+            label: "High dose".to_string(),
+            color: "seagreen".to_string(),
+            shape: LegendShape::Rect,
+            dasharray: None,
+        });
 
     // ── Assemble 11×6 Figure (row-major, 66 cells) ───────────────────────────
 
@@ -1241,7 +1263,7 @@ fn main() {
         vec![Plot::Waterfall(waterfall)],
         vec![Plot::StackedArea(stacked_area)],
         vec![Plot::Streamgraph(streamgraph)],
-        // Row 2: Pie, Series, Band, Heatmap, DotPlot, Clustermap
+        // Row 2: Pie, Series, LinePlot+band, Heatmap, DotPlot, Clustermap
         vec![Plot::Pie(pie)],
         vec![Plot::Series(ser1), Plot::Series(ser2), Plot::Series(ser3)],
         vec![Plot::Line(band_line)],
@@ -1297,13 +1319,13 @@ fn main() {
         vec![Plot::Calendar(calendar)],
         vec![Plot::Funnel(funnel)],
         vec![Plot::Gantt(gantt)],
-        // Row 10: TextPlot, Quiver, Horizontal Bar, Horizontal Box, Horizontal Violin, Horizontal Raincloud
+        // Row 10: TextPlot, Quiver, Horizontal Bar, Pareto, Band, LegendPlot
         vec![Plot::Text(text)],
         vec![Plot::Quiver(quiver)],
         vec![Plot::Bar(bar_h)],
-        vec![Plot::Box(box_h)],
-        vec![Plot::Violin(violin_h)],
-        vec![Plot::Raincloud(raincloud_h)],
+        vec![Plot::Pareto(pareto)],
+        vec![Plot::Band(ribbon_band), Plot::Line(ribbon_line)],
+        vec![Plot::LegendPlot(legend)],
     ];
 
     let layouts: Vec<Layout> = all_plots
@@ -1450,11 +1472,12 @@ fn main() {
                     .with_x_label("x")
                     .with_y_label("y"),
                 62 => base.with_title("Horizontal Bar").with_x_label("Value"),
-                63 => base.with_title("Horizontal Box").with_x_label("Value"),
-                64 => base.with_title("Horizontal Violin").with_x_label("Value"),
-                65 => base
-                    .with_title("Horizontal Raincloud")
-                    .with_x_label("Value"),
+                63 => base.with_title("Pareto Chart"),
+                64 => base
+                    .with_title("Band Plot")
+                    .with_x_label("x")
+                    .with_y_label("y"),
+                65 => base.with_title("Legend"),
                 _ => base,
             }
         })

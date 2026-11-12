@@ -1,5 +1,4 @@
 mod common;
-use std::fs;
 
 use kuva::backend::svg::SvgBackend;
 use kuva::plot::{ColorMap, ContourPlot};

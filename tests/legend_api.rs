@@ -1042,3 +1042,45 @@ fn twin_y_outside_right_bottom_clears_y2_axis() {
         "OutsideRightBottom legend box x ({box_x:.1}) must be > max y2 tick label x ({max_y2_x:.1})"
     );
 }
+
+/// Regression: a `LegendShape::Line` swatch for a multi-segment dash pattern
+/// (e.g. `DashDot`'s "8 4 2 4") must be wide enough to show every segment at
+/// least once. The swatch used a fixed 12px length regardless of pattern,
+/// so DashDot's dot (which starts at position 12 in the pattern) never
+/// appeared — the legend swatch looked like a plain dash.
+#[test]
+fn test_dashdot_legend_swatch_fits_full_pattern() {
+    let line = LinePlot::new()
+        .with_data(vec![(0.0_f64, 0.0), (1.0, 1.0)])
+        .with_dashdot()
+        .with_legend("Series");
+    let plots = vec![Plot::Line(line)];
+    let layout = Layout::auto_from_plots(&plots);
+    let out = svg(plots, layout);
+    common::write_test_output("test_outputs/legend_dashdot_swatch.svg", &out).unwrap();
+
+    // `with_dashdot()` puts the same dasharray on both the plotted line (a
+    // `<path>`) and the legend swatch (a `<line>`); the legend is drawn
+    // last, so its `<line ... stroke-dasharray="8 4 2 4" />` is the LAST
+    // match, not the first.
+    let start = out
+        .rfind(r#"stroke-dasharray="8 4 2 4""#)
+        .expect("expected a DashDot swatch line in the SVG");
+    let line_tag_start = out[..start].rfind("<line").expect("line tag start");
+    let tag = &out[line_tag_start..start];
+
+    let attr = |name: &str| -> f64 {
+        let key = format!(r#"{name}=""#);
+        let s = tag.find(&key).map(|i| i + key.len()).unwrap_or_else(|| {
+            panic!("missing {name} attribute in {tag}");
+        });
+        let e = tag[s..].find('"').unwrap() + s;
+        tag[s..e].parse().unwrap()
+    };
+    let swatch_len = (attr("x2") - attr("x1")).abs();
+
+    assert!(
+        swatch_len >= 18.0 - 1e-6,
+        "DashDot swatch must be at least 18px (one full \"8 4 2 4\" cycle) to show the dot, got {swatch_len}"
+    );
+}

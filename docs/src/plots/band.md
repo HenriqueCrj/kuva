@@ -138,3 +138,5 @@ let plots = vec![Plot::Line(line1), Plot::Line(line2)];
 | `.with_legend(s)` | Add a legend entry |
 | `LinePlot::with_band(lower, upper)` | Attach a band to a line (inherits color) |
 | `ScatterPlot::with_band(lower, upper)` | Attach a band to a scatter plot (inherits color) |
+
+**See also:** [Line Plot](./line.md) and [Scatter Plot](./scatter.md) for the data a band typically attaches to, [Series Plot](./series.md) for multiple bands at once.

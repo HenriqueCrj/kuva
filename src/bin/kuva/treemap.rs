@@ -103,7 +103,7 @@ pub fn run(args: TreemapArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -199,6 +199,28 @@ pub fn run(args: TreemapArgs) -> Result<(), String> {
     }
     if let Some(ref lbl) = args.colorbar_label {
         plot = plot.with_colorbar_label(lbl.clone());
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::TreemapPlot",
+                    "kuva::plot::TreemapNode",
+                    "kuva::plot::TreemapColorMode",
+                    "kuva::plot::TreemapLayout",
+                    "kuva::plot::ColorMap",
+                ],
+                "Treemap",
+                &[crate::emit_code::emit_treemap_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Treemap(plot)];

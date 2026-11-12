@@ -79,7 +79,7 @@ pub fn run(args: Hist2dArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -132,6 +132,22 @@ pub fn run(args: Hist2dArgs) -> Result<(), String> {
     }
     if args.log_count {
         plot = plot.with_log_count();
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::Histogram2D", "kuva::plot::ColorMap"],
+                "Histogram2d",
+                &[crate::emit_code::emit_histogram2d_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                Some(&args.log),
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Histogram2d(plot)];

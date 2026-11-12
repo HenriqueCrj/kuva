@@ -135,7 +135,7 @@ pub fn run(args: Scatter3DArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -176,6 +176,27 @@ pub fn run(args: Scatter3DArgs) -> Result<(), String> {
         }
         plot = apply_options(plot, &args, &z_cmap);
 
+        #[cfg(feature = "emit_code")]
+        if args.base.emit_code {
+            // The per-group legend below is built directly as `LegendEntry`s
+            // on the layout, bypassing `Scatter3DPlot::legend_label` — the
+            // emitted snippet faithfully reproduces the merged, per-point-
+            // colored plot but omits that group legend (no plot-struct field
+            // carries it).
+            print!(
+                "{}",
+                crate::emit_code::assemble(
+                    &["kuva::plot::Scatter3DPlot", "kuva::plot::ColorMap"],
+                    "Scatter3D",
+                    &[crate::emit_code::emit_scatter3d_plot(&plot)],
+                    &args.base,
+                    None,
+                    None,
+                )
+            );
+            return Ok(());
+        }
+
         let plots = vec![Plot::Scatter3D(plot)];
         let mut layout = Layout::auto_from_plots(&plots);
 
@@ -191,10 +212,10 @@ pub fn run(args: Scatter3DArgs) -> Result<(), String> {
             })
             .collect();
         if !entries.is_empty() {
-            let max_len = entries.iter().map(|e| e.label.len()).max().unwrap_or(0);
-            layout.show_legend = true;
-            layout.legend_width = (max_len as f64 * 8.5 + 35.0).max(80.0);
-            layout.legend_entries = Some(entries);
+            // Size the legend box to the measured group labels (swatch + gap + text)
+            // via the shared registration path, instead of a char-count width proxy
+            // with a fixed 80px floor that left dead space beside short labels.
+            layout = layout.with_legend_entries(entries);
         }
 
         let layout = apply_base_args(layout, &args.base);
@@ -222,8 +243,25 @@ pub fn run(args: Scatter3DArgs) -> Result<(), String> {
         if args.depth_shade {
             plot = plot.with_depth_shade();
         }
+        let plot = apply_options(plot, &args, &z_cmap);
 
-        let plots = vec![Plot::Scatter3D(apply_options(plot, &args, &z_cmap))];
+        #[cfg(feature = "emit_code")]
+        if args.base.emit_code {
+            print!(
+                "{}",
+                crate::emit_code::assemble(
+                    &["kuva::plot::Scatter3DPlot", "kuva::plot::ColorMap"],
+                    "Scatter3D",
+                    &[crate::emit_code::emit_scatter3d_plot(&plot)],
+                    &args.base,
+                    None,
+                    None,
+                )
+            );
+            return Ok(());
+        }
+
+        let plots = vec![Plot::Scatter3D(plot)];
         let layout = Layout::auto_from_plots(&plots);
         let layout = apply_base_args(layout, &args.base);
         let scene = render_multiple(plots, layout);

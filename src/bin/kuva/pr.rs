@@ -56,7 +56,7 @@ pub fn run(args: PrArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -108,6 +108,22 @@ pub fn run(args: PrArgs) -> Result<(), String> {
             group = group.with_auc_label(true);
         }
         plot = plot.with_group(group);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::PrPlot", "kuva::plot::pr::PrGroup"],
+                "Pr",
+                &[crate::emit_code::emit_pr_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Pr(plot)];

@@ -229,3 +229,85 @@ fn test_violin_horizontal() {
     assert!(svg.contains("Beta"));
     assert!(svg.contains("Gamma"));
 }
+
+// ── Split violin ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_violin_split_vertical() {
+    let plot = ViolinPlot::new()
+        .with_group("Mon", vec![4.1, 5.0, 5.3, 5.8, 6.2, 7.0, 5.5, 4.8])
+        .with_split_group(vec![5.5, 6.1, 6.4, 7.2, 7.8, 8.5, 6.9, 7.0])
+        .with_group("Tue", vec![3.5, 4.5, 4.8, 5.2, 5.6, 6.1, 4.9, 4.2])
+        .with_split_group(vec![6.0, 6.6, 6.9, 7.5, 8.0, 8.8, 7.2, 7.4])
+        .with_split(true)
+        .with_color("steelblue")
+        .with_split_color("tomato")
+        .with_legend("Male")
+        .with_split_legend("Female");
+
+    let plots = vec![Plot::Violin(plot)];
+    let layout = Layout::auto_from_plots(&plots)
+        .with_title("Split Violin Plot")
+        .with_x_label("Day")
+        .with_y_label("Value");
+    let scene = render_multiple(plots, layout);
+    let svg = SvgBackend.render_scene(&scene);
+    common::write_test_output("test_outputs/violin_split_vertical.svg", svg.clone()).unwrap();
+
+    assert!(svg.contains("<svg"));
+    assert!(svg.contains("steelblue") || svg.contains("#4682b4"));
+    assert!(svg.contains("tomato") || svg.contains("#ff6347"));
+    assert!(svg.contains("Male"));
+    assert!(svg.contains("Female"));
+    // 2 categories x 2 halves = 4 violin path shapes
+    let path_count = svg.matches("<path").count();
+    assert!(
+        path_count >= 4,
+        "expected at least 4 violin half-paths, got {path_count}"
+    );
+}
+
+#[test]
+fn test_violin_split_horizontal() {
+    let plot = ViolinPlot::new()
+        .with_group("Alpha", vec![1.0, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0])
+        .with_split_group(vec![3.0, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0])
+        .with_group("Beta", vec![2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0])
+        .with_split_group(vec![4.0, 5.0, 5.5, 6.0, 6.5, 7.0, 8.0])
+        .with_split(true)
+        .with_horizontal(true)
+        .with_color("seagreen")
+        .with_split_color("gold");
+
+    let plots = vec![Plot::Violin(plot)];
+    let layout = Layout::auto_from_plots(&plots)
+        .with_title("Split Violin Plot (Horizontal)")
+        .with_x_label("Value")
+        .with_y_label("Group");
+    let scene = render_multiple(plots, layout);
+    let svg = SvgBackend.render_scene(&scene);
+    common::write_test_output("test_outputs/violin_split_horizontal.svg", svg.clone()).unwrap();
+
+    assert!(svg.contains("<svg"));
+    assert!(svg.contains("Alpha"));
+    assert!(svg.contains("Beta"));
+}
+
+#[test]
+fn test_violin_split_missing_pair_skips_gracefully() {
+    // Only one split_group provided for two groups — the second category
+    // should render its primary half only, without panicking.
+    let plot = ViolinPlot::new()
+        .with_group("A", vec![1.0, 2.0, 3.0, 4.0, 5.0])
+        .with_split_group(vec![2.0, 3.0, 4.0, 5.0, 6.0])
+        .with_group("B", vec![3.0, 4.0, 5.0, 6.0, 7.0])
+        .with_split(true);
+
+    let plots = vec![Plot::Violin(plot)];
+    let layout = Layout::auto_from_plots(&plots).with_title("Split Violin, Unpaired Category");
+    let scene = render_multiple(plots, layout);
+    let svg = SvgBackend.render_scene(&scene);
+    common::write_test_output("test_outputs/violin_split_unpaired.svg", svg.clone()).unwrap();
+
+    assert!(svg.contains("<svg"));
+}

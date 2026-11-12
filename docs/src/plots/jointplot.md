@@ -290,3 +290,5 @@ let layout = Layout::new((-8.0, 8.0), (-5.0, 5.0))
 | `.with_band(y_lower, y_upper)` | Shaded confidence band |
 | `.with_tooltips()` | Enable SVG hover tooltips |
 | `.with_tooltip_labels(iter)` | Custom per-point tooltip labels |
+
+**See also:** [Scatter Plot](./scatter.md) for the core x/y relationship, [2D Histogram](./histogram2d.md) for a pure 2D density view, [Density Plot](./density.md) for the marginal curves alone.

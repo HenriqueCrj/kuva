@@ -1,4 +1,4 @@
-//! Compact showcase of all 62 kuva plot types in a 11×6 Figure grid.
+//! Compact showcase of all 64 kuva plot types in a 11×6 Figure grid.
 //! Each cell uses minimal inline data — see all_plots_complex for larger
 //! datasets with axes, legends, and titles.
 //!
@@ -10,15 +10,16 @@
 use kuva::backend::svg::SvgBackend;
 use kuva::plot::brick::BrickTemplate;
 use kuva::plot::{
-    BarPlot, BoxPlot, BrickPlot, BumpPlot, CalendarPlot, CandlestickPlot, ChordPlot, Clustermap,
-    ContourPlot, DensityPlot, DicePlot, DotPlot, EcdfPlot, ForestPlot, FunnelPlot, GanttPlot,
-    Heatmap, HexbinPlot, Histogram, Histogram2D, HorizonPlot, JointPlot, LinePlot, LollipopPlot,
-    ManhattanPlot, MosaicPlot, NetworkPlot, ParallelPlot, PhyloTree, PieLabelPosition, PiePlot,
-    PolarMode, PolarPlot, PopulationPyramid, PrGroup, PrPlot, QQPlot, QuiverPlot, RadarPlot,
-    RaincloudPlot, RidgelinePlot, RocGroup, RocPlot, RosePlot, SankeyPlot, Scatter3DPlot,
-    ScatterPlot, SeriesPlot, SlopePlot, StackedAreaPlot, StreamgraphPlot, StripPlot, SunburstPlot,
-    Surface3DPlot, SurvivalPlot, SyntenyPlot, TernaryPlot, TextPlot, TreemapNode, TreemapPlot,
-    UpSetPlot, VennPlot, ViolinPlot, VolcanoPlot, WafflePlot, WaterfallPlot,
+    BandPlot, BarPlot, BoxPlot, BrickPlot, BumpPlot, CalendarPlot, CandlestickPlot, ChordPlot,
+    Clustermap, ContourPlot, DensityPlot, DicePlot, DotPlot, EcdfPlot, ForestPlot, FunnelPlot,
+    GanttPlot, Heatmap, HexbinPlot, Histogram, Histogram2D, HorizonPlot, JointPlot, LegendEntry,
+    LegendPlot, LegendShape, LinePlot, LollipopPlot, ManhattanPlot, MosaicPlot, NetworkPlot,
+    ParallelPlot, ParetoPlot, PhyloTree, PieLabelPosition, PiePlot, PolarMode, PolarPlot,
+    PopulationPyramid, PrGroup, PrPlot, QQPlot, QuiverPlot, RadarPlot, RaincloudPlot,
+    RidgelinePlot, RocGroup, RocPlot, RosePlot, SankeyPlot, Scatter3DPlot, ScatterPlot, SeriesPlot,
+    SlopePlot, StackedAreaPlot, StreamgraphPlot, StripPlot, SunburstPlot, Surface3DPlot,
+    SurvivalPlot, SyntenyPlot, TernaryPlot, TextPlot, TreemapNode, TreemapPlot, UpSetPlot,
+    VennPlot, ViolinPlot, VolcanoPlot, WafflePlot, WaterfallPlot,
 };
 use kuva::render::figure::Figure;
 use kuva::render::layout::Layout;
@@ -125,7 +126,7 @@ fn main() {
         .with_series([7.0_f64, 4.0, 5.0, 6.0, 8.0])
         .with_color("#59a14f");
 
-    // ── Row 2: Pie, Series, Band, Heatmap, DotPlot, Clustermap ───────────────
+    // ── Row 2: Pie, Series, LinePlot with inline band, Heatmap, DotPlot, Clustermap ──
 
     // 12: Pie
     let pie = PiePlot::new()
@@ -149,7 +150,8 @@ fn main() {
         .with_color("forestgreen")
         .with_line_style();
 
-    // 14: Band
+    // 14: LinePlot with an inline confidence band (LinePlot::with_band — distinct
+    // from the standalone BandPlot/Plot::Band cell in row 10)
     let bx: Vec<(f64, f64)> = (0..10)
         .map(|i| {
             let x = i as f64;
@@ -651,25 +653,48 @@ fn main() {
         .with_group("E", vec![(5.0_f64, "steelblue")])
         .with_horizontal(true);
 
-    // 63: Horizontal box
-    let box_h = BoxPlot::new()
-        .with_group("A", grp_a.clone())
-        .with_group("B", grp_b.clone())
-        .with_group("C", grp_c.clone())
-        .with_horizontal(true);
+    // 63: Pareto
+    let pareto = ParetoPlot::new().with_categories(vec![
+        ("Missing field", 42.0),
+        ("Typo", 31.0),
+        ("Timeout", 18.0),
+        ("Other", 9.0),
+    ]);
 
-    // 64: Horizontal violin
-    let violin_h = ViolinPlot::new()
-        .with_group("A", grp_a.clone())
-        .with_group("B", grp_b.clone())
-        .with_group("C", grp_c.clone())
-        .with_horizontal(true);
+    // 64: BandPlot (standalone, paired with a line; band drawn first so it
+    // renders behind it — distinct from cell 14's LinePlot::with_band, which
+    // is a different, inline-band convenience on LinePlot itself)
+    let ribbon_x: Vec<f64> = (0..40).map(|i| i as f64 * 0.3).collect();
+    let ribbon_y: Vec<f64> = ribbon_x.iter().map(|&v| v.sin()).collect();
+    let ribbon_lo: Vec<f64> = ribbon_y.iter().map(|&v| v - 0.3).collect();
+    let ribbon_hi: Vec<f64> = ribbon_y.iter().map(|&v| v + 0.3).collect();
+    let ribbon_band = BandPlot::new(ribbon_x.clone(), ribbon_lo, ribbon_hi)
+        .with_color("steelblue")
+        .with_opacity(0.25);
+    let ribbon_line = LinePlot::new()
+        .with_data(ribbon_x.iter().copied().zip(ribbon_y.iter().copied()))
+        .with_color("steelblue");
 
-    // 65: Horizontal raincloud
-    let raincloud_h = RaincloudPlot::new()
-        .with_group("A", (0..15).map(|i| 2.0 + i as f64 * 0.4).collect())
-        .with_group("B", (0..15).map(|i| 4.5 + i as f64 * 0.3).collect())
-        .with_horizontal(true);
+    // 65: LegendPlot (standalone legend key, no paired data plot)
+    let legend = LegendPlot::new()
+        .with_entry(LegendEntry {
+            label: "Alpha".to_string(),
+            color: "steelblue".to_string(),
+            shape: LegendShape::Rect,
+            dasharray: None,
+        })
+        .with_entry(LegendEntry {
+            label: "Beta".to_string(),
+            color: "tomato".to_string(),
+            shape: LegendShape::Rect,
+            dasharray: None,
+        })
+        .with_entry(LegendEntry {
+            label: "Gamma".to_string(),
+            color: "seagreen".to_string(),
+            shape: LegendShape::Rect,
+            dasharray: None,
+        });
 
     // ── Assemble 11×6 Figure (row-major, 66 cells) ───────────────────────────
 
@@ -688,7 +713,7 @@ fn main() {
         vec![Plot::Waterfall(waterfall)],
         vec![Plot::StackedArea(stacked_area)],
         vec![Plot::Streamgraph(streamgraph)],
-        // Row 2: Pie, Series, Band, Heatmap, DotPlot, Clustermap
+        // Row 2: Pie, Series, LinePlot+band, Heatmap, DotPlot, Clustermap
         vec![Plot::Pie(pie)],
         vec![
             Plot::Series(series1),
@@ -748,13 +773,13 @@ fn main() {
         vec![Plot::Calendar(calendar)],
         vec![Plot::Funnel(funnel)],
         vec![Plot::Gantt(gantt)],
-        // Row 10: TextPlot, Quiver, Horizontal Bar, Horizontal Box, Horizontal Violin, Horizontal Raincloud
+        // Row 10: TextPlot, Quiver, Horizontal Bar, Pareto, Band, LegendPlot
         vec![Plot::Text(text)],
         vec![Plot::Quiver(quiver)],
         vec![Plot::Bar(bar_h)],
-        vec![Plot::Box(box_h)],
-        vec![Plot::Violin(violin_h)],
-        vec![Plot::Raincloud(raincloud_h)],
+        vec![Plot::Pareto(pareto)],
+        vec![Plot::Band(ribbon_band), Plot::Line(ribbon_line)],
+        vec![Plot::LegendPlot(legend)],
     ];
 
     let layouts: Vec<Layout> = all_plots

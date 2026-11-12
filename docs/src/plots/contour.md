@@ -167,3 +167,35 @@ let cp = ContourPlot::new()
 | `.with_line_color(s)` | Fixed color for all iso-lines (default: derive from colormap) |
 | `.with_line_width(px)` | Iso-line stroke width in pixels (default `1.0`) |
 | `.with_legend(s)` | Colorbar label (filled mode) or line legend entry (line mode) |
+
+**See also:** [Heatmap](./heatmap.md) for the raw gridded values, [2D Histogram](./histogram2d.md) for binned point density, [Scatter Plot](./scatter.md) for the underlying x/y/z points.
+
+---
+
+## CLI
+
+Contour plot from scattered (x, y, z) triplets.
+
+**Input:** three columns — x coordinate, y coordinate, scalar value.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--x <COL>` | `0` | X column |
+| `--y <COL>` | `1` | Y column |
+| `--z <COL>` | `2` | Scalar value column |
+| `--levels <N>` | `8` | Number of contour levels |
+| `--filled` | off | Fill between contour levels |
+| `--colormap <NAME>` | `viridis` | Color map (filled mode) |
+| `--line-color <CSS>` | — | Line color (unfilled mode) |
+| `--legend <LABEL>` | — | Show legend entry |
+
+```bash
+kuva contour contour.tsv --x x --y y --z density
+
+kuva contour contour.tsv --x x --y y --z density \
+    --filled --levels 12 --colormap inferno
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, log scale.*

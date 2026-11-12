@@ -312,3 +312,38 @@ let svg = SvgBackend.render_scene(&render_multiple(plots, layout));
 ### `LineStyle` variants
 
 `Solid` (default) · `Dashed` (`8 4`) · `Dotted` (`2 4`) · `DashDot` (`8 4 2 4`) · `Custom(String)`
+
+**See also:** [Scatter Plot](./scatter.md) for unconnected points, [Series Plot](./series.md) for multiple named series on one canvas, [Band Plot](./band.md) for an attached confidence interval.
+
+---
+
+## CLI
+
+Line plot. Identical column flags to scatter; adds line-style options.
+
+**Input:** any tabular file with two numeric columns, sorted by x.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--x <COL>` | `0` | X-axis column |
+| `--y <COL>` | `1` | Y-axis column |
+| `--color-by <COL>` | — | Multi-series grouping |
+| `--color <CSS>` | `steelblue` | Line color (single-series) |
+| `--stroke-width <PX>` | `2.0` | Line stroke width |
+| `--dashed` | off | Dashed line style |
+| `--dotted` | off | Dotted line style |
+| `--fill` | off | Fill area under the line |
+| `--legend` | off | Show legend |
+| `--x-date-format <FMT>` | — | Parse the X column as a date/time (see [Date/time X axis](../cli/index.md#datetime-x-axis-scatter-line)) |
+
+```bash
+kuva line measurements.tsv --x time --y value --color-by group --legend
+
+kuva line measurements.tsv --x time --y value --fill --color "rgba(70,130,180,0.4)"
+
+kuva line prices.tsv --x date --y close --x-date-format "%Y-%m-%d"
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, log scale.*

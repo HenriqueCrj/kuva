@@ -1,7 +1,48 @@
 use crate::layout_args::BaseArgs;
+use clap::builder::{PathBufValueParser, TypedValueParser};
 use kuva::backend::svg::SvgBackend;
 use kuva::render::render::Scene;
 use std::fs;
+use std::path::{Path, PathBuf};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OutputFormat {
+    Svg,
+    Png,
+    Pdf,
+}
+
+impl OutputFormat {
+    fn from_path(path: &Path) -> Result<Self, String> {
+        let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+            return Err(unsupported_output_path(path));
+        };
+
+        match extension.to_ascii_lowercase().as_str() {
+            "svg" => Ok(Self::Svg),
+            "png" => Ok(Self::Png),
+            "pdf" => Ok(Self::Pdf),
+            _ => Err(unsupported_output_path(path)),
+        }
+    }
+}
+
+fn unsupported_output_path(path: &Path) -> String {
+    format!(
+        "unsupported output path '{}': expected an extension of .svg, .png, or .pdf",
+        path.display()
+    )
+}
+
+fn validate_output_path(path: PathBuf) -> Result<PathBuf, std::io::Error> {
+    OutputFormat::from_path(&path)
+        .map(|_| path)
+        .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))
+}
+
+pub(crate) fn output_path_parser() -> impl TypedValueParser<Value = PathBuf> {
+    PathBufValueParser::new().try_map(validate_output_path)
+}
 
 /// Write the scene to a file (format inferred from extension) or SVG to stdout.
 pub fn write_output(mut scene: Scene, args: &BaseArgs) -> Result<(), String> {
@@ -35,33 +76,78 @@ pub fn write_output(mut scene: Scene, args: &BaseArgs) -> Result<(), String> {
             print!("{}", svg_backend.render_scene(&scene));
             Ok(())
         }
-        Some(path) => {
-            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("svg");
-            match ext {
-                "png" => {
-                    #[cfg(feature = "png")]
-                    {
-                        let bytes = kuva::PngBackend::new().render_scene(&scene)?;
-                        fs::write(path, bytes).map_err(|e| e.to_string())
-                    }
-                    #[cfg(not(feature = "png"))]
-                    Err("PNG output requires the 'png' feature. \
-                         Rebuild with: cargo build --bin kuva --features cli,png"
-                        .to_string())
-                }
-                "pdf" => {
-                    #[cfg(feature = "pdf")]
-                    {
-                        let bytes = kuva::PdfBackend.render_scene(&scene)?;
-                        fs::write(path, bytes).map_err(|e| e.to_string())
-                    }
-                    #[cfg(not(feature = "pdf"))]
-                    Err("PDF output requires the 'pdf' feature. \
-                         Rebuild with: cargo build --bin kuva --features cli,pdf"
-                        .to_string())
-                }
-                _ => fs::write(path, svg_backend.render_scene(&scene)).map_err(|e| e.to_string()),
+        Some(path) => match OutputFormat::from_path(path)? {
+            OutputFormat::Svg => {
+                fs::write(path, svg_backend.render_scene(&scene)).map_err(|e| e.to_string())
             }
+            OutputFormat::Png => {
+                #[cfg(feature = "png")]
+                {
+                    let bytes = kuva::PngBackend::new().render_scene(&scene)?;
+                    fs::write(path, bytes).map_err(|e| e.to_string())
+                }
+                #[cfg(not(feature = "png"))]
+                Err("PNG output requires the 'png' feature. \
+                         Rebuild with: cargo build --bin kuva --features cli,png"
+                    .to_string())
+            }
+            OutputFormat::Pdf => {
+                #[cfg(feature = "pdf")]
+                {
+                    let bytes = kuva::PdfBackend::new().render_scene(&scene)?;
+                    fs::write(path, bytes).map_err(|e| e.to_string())
+                }
+                #[cfg(not(feature = "pdf"))]
+                Err("PDF output requires the 'pdf' feature. \
+                         Rebuild with: cargo build --bin kuva --features cli,pdf"
+                    .to_string())
+            }
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OutputFormat;
+    use std::path::Path;
+
+    #[test]
+    fn output_format_recognizes_supported_extensions_case_insensitively() {
+        let cases = [
+            ("plot.svg", OutputFormat::Svg),
+            ("plot.SvG", OutputFormat::Svg),
+            ("plot.png", OutputFormat::Png),
+            ("plot.PnG", OutputFormat::Png),
+            ("plot.pdf", OutputFormat::Pdf),
+            ("plot.PdF", OutputFormat::Pdf),
+        ];
+
+        for (path, expected) in cases {
+            assert_eq!(OutputFormat::from_path(Path::new(path)), Ok(expected));
         }
+    }
+
+    #[test]
+    fn output_format_rejects_missing_and_unsupported_extensions() {
+        for path in ["plot", "plot.", "plot.txt", ".svg"] {
+            let error = OutputFormat::from_path(Path::new(path)).unwrap_err();
+            assert!(error.contains(".svg"), "unexpected error: {error}");
+            assert!(error.contains(".png"), "unexpected error: {error}");
+            assert!(error.contains(".pdf"), "unexpected error: {error}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_format_rejects_non_unicode_extension() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+        use std::path::PathBuf;
+
+        let mut bytes = b"plot.".to_vec();
+        bytes.push(0xff);
+        let path = PathBuf::from(OsString::from_vec(bytes));
+
+        assert!(OutputFormat::from_path(&path).is_err());
     }
 }

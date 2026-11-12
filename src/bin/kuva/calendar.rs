@@ -54,7 +54,7 @@ pub fn run(args: CalendarArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -94,6 +94,22 @@ pub fn run(args: CalendarArgs) -> Result<(), String> {
 
     if args.no_legend {
         plot = plot.with_legend(false);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::CalendarPlot", "kuva::plot::CalendarAgg"],
+                "Calendar",
+                &[crate::emit_code::emit_calendar_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Calendar(plot)];

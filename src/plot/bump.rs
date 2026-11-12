@@ -79,8 +79,12 @@ pub struct BumpPlot {
     pub rank_ascending: bool,
     /// Tie-breaking mode used by `.with_raw_series()`.
     pub tie_break: BumpTieBreak,
-    /// Raw-value series queued for deferred auto-ranking.
-    pub(crate) raw_values: Vec<(String, Vec<Option<f64>>, Option<String>)>,
+    /// Raw-value series queued for deferred auto-ranking (added via
+    /// `.with_raw_series()` / `.with_raw_series_opt()`). Each tuple is
+    /// `(name, values, color)` — `color` is always `None` today since neither
+    /// builder sets it; ranks are resolved from these at render time and never
+    /// written back to `series`.
+    pub raw_values: Vec<(String, Vec<Option<f64>>, Option<String>)>,
 }
 
 impl Default for BumpPlot {

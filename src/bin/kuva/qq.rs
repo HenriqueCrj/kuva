@@ -58,7 +58,7 @@ pub fn run(args: QQArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -103,6 +103,22 @@ pub fn run(args: QQArgs) -> Result<(), String> {
         } else {
             plot = plot.with_data("", values);
         }
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::QQPlot"],
+                "QQ",
+                &[crate::emit_code::emit_qq_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::QQ(plot)];

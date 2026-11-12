@@ -60,6 +60,29 @@ fn test_pyramid_with_legend() {
 }
 
 #[test]
+fn test_pyramid_single_series_legend_width_scales_with_label_length() {
+    // Single-series (`pp.series.len() <= 1`) legend width must be measured from the
+    // real left/right label text, not stuck at the bare 40px offset regardless of
+    // label content — otherwise a long label overflows the legend box.
+    let short = simple_pyramid().with_legend(true);
+    let long = simple_pyramid()
+        .with_left_label("Population aged 65 and above (male)")
+        .with_right_label("Population aged 65 and above (female)")
+        .with_legend(true);
+
+    let short_layout = Layout::auto_from_plots(&[Plot::Pyramid(short)]);
+    let long_layout = Layout::auto_from_plots(&[Plot::Pyramid(long)]);
+
+    assert!(
+        long_layout.legend_width > short_layout.legend_width,
+        "long single-series pyramid labels ({:.1}px) should widen the legend box \
+         vs short labels ({:.1}px)",
+        long_layout.legend_width,
+        short_layout.legend_width,
+    );
+}
+
+#[test]
 fn test_pyramid_normalized() {
     let pp = simple_pyramid().with_normalize(true);
     let svg = render(pp, "Normalized Pyramid");
@@ -258,15 +281,22 @@ fn test_pyramid_bar_width() {
     // Extract the first rect height from each SVG (the left bar of group 0).
     // Format in SVG output is: height="NNN.NN"
     fn first_rect_height(svg: &str) -> f64 {
-        // Bar rects have fractional pixel heights (e.g. "40.67"); skip integer
-        // heights which belong to the canvas, clip rect, and axis lines.
-        for cap in svg.split("height=\"") {
-            let s = cap.split('"').next().unwrap_or("");
-            if s.contains('.') {
-                if let Ok(v) = s.parse::<f64>() {
-                    if v > 1.0 {
-                        return v;
-                    }
+        // A data bar is a <rect> with a hex `fill` — skip the white background and
+        // the plot-area rect (whose height is now sub-pixel and would otherwise be
+        // mistaken for a bar).
+        for rect in svg.split("<rect").skip(1) {
+            let head = &rect[..rect.find('>').unwrap_or(rect.len())];
+            if !head.contains("fill=\"#") {
+                continue;
+            }
+            if let Some(hpos) = head.find("height=\"") {
+                if let Ok(v) = head[hpos + 8..]
+                    .split('"')
+                    .next()
+                    .unwrap_or("")
+                    .parse::<f64>()
+                {
+                    return v;
                 }
             }
         }

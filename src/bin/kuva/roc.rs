@@ -60,7 +60,7 @@ pub fn run(args: RocArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -118,6 +118,22 @@ pub fn run(args: RocArgs) -> Result<(), String> {
             group = group.with_auc_label(true);
         }
         plot = plot.with_group(group);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::RocPlot", "kuva::plot::RocGroup"],
+                "Roc",
+                &[crate::emit_code::emit_roc_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Roc(plot)];

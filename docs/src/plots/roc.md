@@ -12,6 +12,8 @@ A Receiver Operating Characteristic (ROC) curve plots the true positive rate (se
 
 Build one `RocGroup` per classifier using `.with_raw()`, which accepts `(score, bool)` pairs. Pass raw scores — `RocGroup` computes the curve and AUC internally.
 
+Each distinct score value gets its own ROC threshold, even if two values are very close. AUC is the fraction of positive-negative pairs in which the positive sample has the higher score, with equal-score pairs counting as half a win. A group with a NaN score has no curve or AUC, because NaN cannot be ordered.
+
 ```rust,no_run
 use kuva::plot::{RocPlot, RocGroup};
 use kuva::backend::svg::SvgBackend;
@@ -297,3 +299,35 @@ let plots = vec![Plot::Roc(roc)];
 | `.with_auc_label(bool)` | `true` | Append `AUC = …` to the legend entry |
 | `.with_line_width(px)` | `2.0` | Curve stroke width |
 | `.with_dasharray(s)` | — | SVG stroke-dasharray string (e.g. `"8 4"`) |
+
+**See also:** [Precision-Recall Curve](./pr.md) for imbalanced-class model evaluation, [Kaplan-Meier Survival Curve](./survival.md) for another step-function statistical curve.
+
+---
+
+## CLI
+
+ROC curve — receiver operating characteristic for binary classifiers, with optional AUC and confidence intervals.
+
+**Input:** one row per sample with a numeric score column and a binary label column (1 = positive, 0 = negative).
+
+| Flag | Default | Description |
+|---|---|---|
+| `--score-col <COL>` | `0` | Classifier score column (higher = more positive) |
+| `--label-col <COL>` | `1` | True label column (1/0 or true/false) |
+| `--color-by <COL>` | — | Group column; one curve per unique value |
+| `--no-diagonal` | off | Hide the random-classifier diagonal reference line |
+| `--ci` | off | Show DeLong 95% confidence interval band |
+| `--auc-label` | off | Append AUC value to each curve's legend entry |
+| `--legend <LABEL>` | — | Add a legend |
+
+```bash
+kuva roc data.tsv --score-col score --label-col label --auc-label
+
+kuva roc data.tsv --score-col score --label-col label \
+    --color-by model --ci --auc-label --legend "Model" \
+    --title "ROC Curves"
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes.*

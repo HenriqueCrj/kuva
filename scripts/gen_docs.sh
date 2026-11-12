@@ -11,12 +11,16 @@ EXAMPLES=(
     figure
     boxplot
     brick
+    brick_pop
     bump
+    bw_mode
     calendar
     candlestick
     chord
     clustermap
+    colormap_swatches
     contour
+    coverage
     datetime
     density
     diceplot
@@ -41,6 +45,7 @@ EXAMPLES=(
     mosaic
     network
     parallel
+    pareto
     phylo
     pie
     polar
@@ -58,6 +63,7 @@ EXAMPLES=(
     scatter
     scatter3d
     series
+    showcase
     slope
     stacked_area
     streamgraph
@@ -80,13 +86,18 @@ EXAMPLES=(
     all_plots_complex
 )
 
+# `typst-math` is opt-in and not part of `full`, but the committed math assets
+# (docs/src/assets/math/*.svg) must show the typeset tier rather than the
+# Unicode fallback, so doc generation enables it explicitly.
+DOC_FEATURES="full,typst-math"
+
 echo "Building examples..."
-cargo build --features full --examples --quiet
+cargo build --features "$DOC_FEATURES" --examples --quiet
 
 echo "Generating doc SVGs..."
 for ex in "${EXAMPLES[@]}"; do
     echo "  $ex"
-    cargo run --features full --example "$ex" --quiet
+    cargo run --features "$DOC_FEATURES" --example "$ex" --quiet
 done
 
 echo "Done."

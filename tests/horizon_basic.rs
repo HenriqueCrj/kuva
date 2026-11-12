@@ -5,6 +5,36 @@ use kuva::render::layout::Layout;
 use kuva::render::plots::Plot;
 use kuva::render::render::render_horizon;
 
+/// x position of the `<text>` element whose content is exactly `content`.
+fn text_x(svg: &str, content: &str) -> f64 {
+    let needle = format!(">{content}</text>");
+    let close = svg
+        .find(&needle)
+        .unwrap_or_else(|| panic!("no <text> with content {content:?}"));
+    let open = svg[..close].rfind("<text ").expect("opening <text>");
+    let tag = &svg[open..close];
+    let key = "x=\"";
+    let s = tag.find(key).expect("x attr") + key.len();
+    let e = tag[s..].find('"').unwrap() + s;
+    tag[s..e].parse().unwrap()
+}
+
+/// x position of the `<text>` element immediately following the one whose content
+/// is exactly `content` (used to find the value label drawn after a "+"/"-" sign).
+fn next_text_x(svg: &str, after_content: &str) -> f64 {
+    let needle = format!(">{after_content}</text>");
+    let close = svg
+        .find(&needle)
+        .unwrap_or_else(|| panic!("no <text> with content {after_content:?}"))
+        + needle.len();
+    let open = svg[close..].find("<text ").expect("a following <text>") + close;
+    let tag_start = open + "<text ".len();
+    let key = "x=\"";
+    let s = svg[tag_start..].find(key).expect("x attr") + tag_start + key.len();
+    let e = svg[s..].find('"').unwrap() + s;
+    svg[s..e].parse().unwrap()
+}
+
 fn svg(hp: HorizonPlot) -> String {
     let layout = Layout::auto_from_plots(&[Plot::Horizon(hp.clone())]);
     SvgBackend.render_scene(&render_horizon(hp, layout))
@@ -463,7 +493,7 @@ fn test_horizon_many_rows_dense_timeseries() {
                 let drift_val = d * drift;
                 let noise = ((d * freq * 13.7).sin() + (d * freq * 5.3).cos()) * noise_amp * 0.4;
                 // Occasional spike on a different schedule per instrument
-                let spike = if (d as usize + idx * 17) % 30 == 0 {
+                let spike = if (d as usize + idx * 17).is_multiple_of(30) {
                     amp * 1.5
                 } else {
                     0.0
@@ -684,4 +714,33 @@ fn test_horizon_all_negative_no_pos_paths() {
     // negative color (#d62728) SHOULD appear
     assert!(out.contains("#d62728"));
     save("horizon_all_negative", &out);
+}
+
+#[test]
+fn test_horizon_sign_offset_differs_for_plus_and_minus() {
+    // Real "+" and "-" glyphs have different advance widths in DejaVu Sans. Before
+    // the fix, both used the same `mean_char_width` estimate, so the gap between
+    // the sign and the following value label was identical for both signs — real
+    // per-glyph measurement must now show a different gap for "+" vs "-".
+    let x: Vec<f64> = (0..10).map(|i| i as f64).collect();
+    let y: Vec<f64> = x.iter().map(|&t| (t - 5.0) * 2.0).collect(); // crosses baseline
+    let hp = HorizonPlot::new()
+        .with_series("S", x, y)
+        .with_value_labels(true)
+        .with_sign_colors(true);
+    let out = svg(hp);
+    save("horizon_sign_offset", &out);
+
+    let plus_x = text_x(&out, "+");
+    let plus_value_x = next_text_x(&out, "+");
+    let minus_x = text_x(&out, "-");
+    let minus_value_x = next_text_x(&out, "-");
+
+    let gap_pos = plus_value_x - plus_x;
+    let gap_neg = minus_value_x - minus_x;
+    assert!(
+        (gap_pos - gap_neg).abs() > 0.5,
+        "gap after '+' ({gap_pos:.2}) and after '-' ({gap_neg:.2}) should differ \
+         under real glyph measurement, not share the old mean-char-width estimate"
+    );
 }

@@ -70,7 +70,7 @@ pub fn run(args: PyramidArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -119,6 +119,22 @@ pub fn run(args: PyramidArgs) -> Result<(), String> {
 
     for ((label, left), right) in labels.iter().zip(lefts.iter()).zip(rights.iter()) {
         plot = plot.with_group(label.as_str(), *left, *right);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::PopulationPyramid"],
+                "Pyramid",
+                &[crate::emit_code::emit_pyramid_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Pyramid(plot)];

@@ -44,10 +44,13 @@ let layout = Layout::new((0.0, 100.0), (-1.0, 1.0))
 # use kuva::render::plots::Plot;
 # let plots: Vec<Plot> = vec![];
 let layout = Layout::auto_from_plots(&plots)
-    .with_title("My Plot")          // text above the plot area
-    .with_x_label("Concentration")  // label below the x-axis
-    .with_y_label("Response (%)");  // label left of the y-axis
+    .with_title("My Plot")              // text above the plot area
+    .with_subtitle("n = 1,234 cells")   // smaller, muted line under the title
+    .with_x_label("Concentration")      // label below the x-axis
+    .with_y_label("Response (%)");      // label left of the y-axis
 ```
+
+`with_subtitle` draws a second line centred under the title — useful for a one-line data summary. By default it is sized at `round(0.7 × title_size)` (override with `with_subtitle_size`) and coloured by muting the title colour toward the background, so it adapts to light and dark themes. Like the title, it stays on one line unless you set a wrap width — `with_subtitle_wrap` wraps it independently of the title — and the title block reserves the extra height automatically. CLI: `--subtitle` and `--subtitle-wrap`.
 
 ---
 
@@ -90,6 +93,8 @@ let layout = Layout::auto_from_plots(&plots)
 | `Sci` | `1.23e4` | Always scientific notation |
 | `Percent` | `45.0%` | Multiply by 100 and append `%` — for data in the range 0–1 |
 | `Custom(fn)` | anything | Provide your own `fn(f64) -> String` |
+
+`Auto` uses scientific notation for small nonzero values instead of rounding them to a zero label. `Integer` and `Fixed(n)` still use the rounding you request.
 
 Apply the same format to both axes, or set them independently:
 
@@ -528,7 +533,7 @@ Font family and sizes for all text elements. Sizes are in pixels.
 # use kuva::render::plots::Plot;
 # let plots: Vec<Plot> = vec![];
 let layout = Layout::auto_from_plots(&plots)
-    .with_font_family("Arial, sans-serif")  // default: "DejaVu Sans, Liberation Sans, Arial, sans-serif"
+    .with_font_family("Arial, sans-serif")  // default: "DejaVu Sans, Verdana, Liberation Sans, Arial, sans-serif"
     .with_title_size(20)                    // default: 18
     .with_label_size(14)                    // default: 14  (axis labels)
     .with_tick_size(11)                     // default: 12  (tick labels)
@@ -536,6 +541,44 @@ let layout = Layout::auto_from_plots(&plots)
 ```
 
 These can also be set via a `Theme` — see the [Themes](./themes.md) reference.
+
+For greyscale/print-safe or color-vision-deficient-accessible rendering, see [Black & White / Accessibility Mode](./bw_mode.md) — `Layout::with_bw_mode()` replaces palette colors with grey shades, hatch patterns, dash styles, and marker shapes.
+
+### Tick label font
+
+`with_tick_font_family` sets the font family of the axis tick labels only, leaving titles, axis labels, and legends in the main family. Use it for fixed-width category labels such as sequence contexts:
+
+```rust,no_run
+# use kuva::render::layout::Layout;
+# use kuva::render::plots::Plot;
+# let plots: Vec<Plot> = vec![];
+let layout = Layout::auto_from_plots(&plots)
+    .with_x_tick_rotate(-90.0)
+    .with_tick_font_family("monospace");
+```
+
+<img src="../assets/layout/tick_font_family.svg" alt="Monospace sequence-context tick labels with a sans-serif title" width="560">
+
+It applies to rotated and upright labels wherever kuva draws a tick label:
+
+| Covered | Not covered (these are titles, and keep the main family) |
+|---------|---------------------------------------------------------|
+| x, y, secondary x and y axis ticks | Plot title and subtitle |
+| Manhattan chromosome labels | x, y and secondary axis labels |
+| Polar ring (r) values and theta spokes | Ternary corner labels |
+| Ternary edge percentages | Parallel-coordinates axis names |
+| Radar ring values and spoke names | 3D axis labels |
+| Parallel-coordinates per-axis values | Colorbar label |
+| 3D x, y and z axis ticks | Legend entries |
+| Colorbar tick labels | Data labels (bar values, point labels, gene names) |
+
+Width reservation follows the face: kuva measures a monospace tick label against the bundled DejaVu Sans Mono advance widths, not the sans ones. This matters more than it sounds. A fixed-width face is *narrower* than DejaVu Sans for digits (0.602 em against 0.636 em) but much wider for thin glyphs: `.` goes from 0.318 em to 0.602 em, so a decimal y-axis measured with sans metrics reserves a gutter several pixels short and clips its own labels. Setting `with_font_family("monospace")` (no tick-specific family) reserves tick labels the same way, since they render in that face too.
+
+The family itself decides this, not the presence of the option: a family carrying `mono` or `monospace` as a word (`"DejaVu Sans Mono"`, `"ui-monospace"`) or one of the common fixed-width faces that do not (`"Consolas"`, `"Fira Code"`, `"Menlo"`, `"Courier New"`) measures as monospace; anything else keeps the sans metrics. Only the first family in the list counts, the one a renderer picks when it has it.
+
+**Backends.** SVG and PDF honour the option; the PDF backend resolves the generic `monospace` family to the bundled DejaVu Sans Mono, so it renders the same on every system. PNG and terminal output ignore it and draw ticks in the bundled DejaVu Sans, exactly as they already ignore `with_font_family`: kuva rasterises PNG itself rather than handing the SVG to a system font stack. A figure exported both ways will therefore show monospace ticks in the SVG or PDF and sans ticks in the PNG.
+
+**Genome browser.** A [`TrackStack`](../plots/coverage.md) builds its own layout per track, so it carries the option itself: `TrackStack::with_tick_font_family` (and `CoveragePlot::with_tick_font_family`) applies it to the shared genomic x-axis and to every track's y-axis ticks at once, leaving track names and the axis label alone.
 
 ---
 
@@ -578,6 +621,7 @@ let layout = Layout::auto_from_plots(&plots)
 |------|-------------|
 | `--wrap <N>` | Wrap all text at N characters |
 | `--title-wrap <N>` | Wrap title only |
+| `--subtitle-wrap <N>` | Wrap subtitle only |
 | `--x-label-wrap <N>` | Wrap x-axis label only |
 | `--y-label-wrap <N>` | Wrap y-axis label only |
 | `--y2-label-wrap <N>` | Wrap secondary y-axis label only |
@@ -586,6 +630,7 @@ let layout = Layout::auto_from_plots(&plots)
 ### What happens when wrapping is enabled
 
 - **Title** wraps into centred lines; `margin_top` grows to fit.
+- **Subtitle** wraps into centred lines below the title; `margin_top` grows to fit.
 - **X label** wraps into centred lines; `margin_bottom` grows.
 - **Y label** wraps into multiple rotated lines stacked horizontally; `margin_left` grows.
 - **Y2 label** same as y-label but on the right side.
@@ -610,6 +655,7 @@ Wrapping splits at whitespace boundaries. A single word longer than the limit is
 | Method | Description |
 |--------|-------------|
 | `.with_title(s)` | Plot title |
+| `.with_subtitle(s)` | Muted second line under the title (`.with_subtitle_size(n)` overrides its size) |
 | `.with_x_label(s)` | X-axis label |
 | `.with_y_label(s)` | Y-axis label |
 | `.with_ticks(n)` | Approximate number of tick intervals |
@@ -670,6 +716,7 @@ Wrapping splits at whitespace boundaries. A single word longer than the limit is
 |--------|-------------|
 | `.with_wrap(n)` | Wrap all text elements at `n` characters (title, labels, legend). Call before per-element overrides. |
 | `.with_title_wrap(n)` | Wrap title at `n` characters |
+| `.with_subtitle_wrap(n)` | Wrap subtitle at `n` characters (independent of the title) |
 | `.with_x_label_wrap(n)` | Wrap x-axis label at `n` characters |
 | `.with_y_label_wrap(n)` | Wrap y-axis label at `n` characters |
 | `.with_y2_label_wrap(n)` | Wrap secondary y-axis label at `n` characters |
@@ -730,8 +777,10 @@ let layout = Layout::auto_from_plots(&plots)
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.with_font_family(s)` | `"DejaVu Sans, Liberation Sans, Arial, sans-serif"` | CSS font-family string |
+| `.with_font_family(s)` | `"DejaVu Sans, Verdana, Liberation Sans, Arial, sans-serif"` | CSS font-family string |
+| `.with_tick_font_family(s)` | inherits `with_font_family` | CSS font-family string for axis tick labels only |
 | `.with_title_size(n)` | `18` | Title font size (px) |
+| `.with_subtitle_size(n)` | `0.7 × title` | Subtitle font size (px) |
 | `.with_label_size(n)` | `14` | Axis label font size (px) |
 | `.with_tick_size(n)` | `12` | Tick label font size (px) |
 | `.with_body_size(n)` | `12` | Body text font size (px) |

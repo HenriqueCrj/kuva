@@ -35,6 +35,7 @@ pub use crate::plot::{
     DotPoint,
     EcdfGroup,
     EcdfPlot,
+    FillPattern,
     ForestPlot,
     ForestRow,
     FunnelColorMode,
@@ -199,7 +200,7 @@ pub use crate::render_to_svg;
 pub use crate::render_to_png;
 
 #[cfg(feature = "pdf")]
-pub use crate::render_to_pdf;
+pub use crate::{render_to_pdf, render_to_pdf_multi};
 
 // ── Backends ─────────────────────────────────────────────────────────────────
 pub use crate::backend::svg::SvgBackend;
@@ -209,7 +210,7 @@ pub use crate::backend::terminal::TerminalBackend;
 pub use crate::backend::png::PngBackend;
 
 #[cfg(feature = "pdf")]
-pub use crate::backend::pdf::PdfBackend;
+pub use crate::backend::pdf::{PageSize, PdfBackend};
 
 // `Background` / `TextColor` / `Tooltip` are intentionally NOT in the prelude:
 // those bare nouns collide too easily with a host Dioxus app's own types on a

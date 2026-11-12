@@ -185,3 +185,5 @@ Override with `.with_dot_radius(px)` for a fixed radius.
 | `.with_dot_radius(px)` | Fixed dot radius (`0.0` = auto) |
 | `.with_cell_size(w, h)` | Tile size as fraction of cell (default `0.8, 0.8`) |
 | `.with_pad(pad)` | Intra-tile padding fraction (default `0.1`) |
+
+**See also:** [Dot Plot](./dotplot.md) for the simpler size/color grid it extends, [Mosaic Plot](./mosaic.md) for another multivariate categorical grid.

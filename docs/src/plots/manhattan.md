@@ -10,6 +10,8 @@ A Manhattan plot displays **GWAS p-values** across the genome. Each point repres
 
 When base-pair positions are unavailable, pass `(chrom, pvalue)` pairs to `.with_data()`. Chromosomes are sorted in standard genomic order (1–22, X, Y, MT); points within each chromosome receive consecutive integer x positions.
 
+Points with a p-value outside `[0, 1]` (including NaN) or a non-finite x position are not drawn or labeled, and the CLI rejects such p-values with the row number.
+
 ```rust,no_run
 use kuva::plot::ManhattanPlot;
 use kuva::backend::svg::SvgBackend;
@@ -217,7 +219,54 @@ it expands the bottom margin automatically to accommodate the second row.
 | `.with_palette(p)` | Full palette, overrides alternating colors |
 | `.with_point_size(f)` | Circle radius in pixels (default `2.5`) |
 | `.with_label_top(n)` | Label the `n` top hits above genome-wide threshold |
-| `.with_label_style(s)` | `Nudge` (default), `Exact`, or `Arrow { offset_x, offset_y }` |
+| `.with_label_style(s)` | `Nudge` (default), `Exact`, `Arrow { offset_x, offset_y }`, or `Repel` (force-directed) |
 | `.with_point_labels(iter)` | Attach gene/SNP names to specific `(chrom, x)` positions |
 | `.with_pvalue_floor(f)` | Explicit p-value floor for −log₁₀ transform |
 | `.with_legend(s)` | Show genome-wide and suggestive legend entries |
+
+**See also:** [Volcano Plot](./volcano.md) for effect-size vs. significance instead of genomic position, [Q-Q Plot](./qq.md) for checking genomic inflation directly.
+
+---
+
+## CLI
+
+Manhattan plot for GWAS results.
+
+**Input:** chromosome, (optional) base-pair position, and p-value columns.
+
+Two layout modes:
+- **Sequential** *(default)*: chromosomes are sorted and SNPs receive consecutive integer x-positions. Position column is not used.
+- **Base-pair** (`--genome-build`): SNP x-coordinates are resolved from chromosome sizes in a reference build.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--chr-col <COL>` | `0` | Chromosome column |
+| `--pos-col <COL>` | `1` | Base-pair position column (bp mode only) |
+| `--pvalue-col <COL>` | `2` | p-value column |
+| `--pvalue-col-is-log` | off | p-value column already contains −log₁₀(p); un-transform before plotting |
+| `--genome-build <BUILD>` | — | Enable bp mode: `hg19`, `hg38`, or `t2t` |
+| `--genome-wide <F>` | `7.301` | Genome-wide threshold (−log₁₀ scale) |
+| `--suggestive <F>` | `5.0` | Suggestive threshold (−log₁₀ scale) |
+| `--top-n <N>` | `0` | Label N most-significant points above genome-wide threshold |
+| `--label-style <STYLE>` | `nudge` | Label placement: `nudge`, `exact`, or `repel` |
+| `--point-size <PX>` | `2.5` | Point radius |
+| `--color-a <CSS>` | `steelblue` | Even-chromosome color |
+| `--color-b <CSS>` | `#5aadcb` | Odd-chromosome color |
+| `--legend` | off | Show threshold legend |
+
+```bash
+# sequential mode (no position column needed)
+kuva manhattan gene_stats.tsv --chr-col chr --pvalue-col pvalue --top-n 5
+
+# base-pair mode
+kuva manhattan gwas.tsv \
+    --chr-col chr --pos-col pos --pvalue-col pvalue \
+    --genome-build hg38 --top-n 10 --legend
+
+# when p-value column already holds -log10(p)
+kuva manhattan gwas.tsv --chr-col chr --pvalue-col neg_log10_p --pvalue-col-is-log
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, log scale.*

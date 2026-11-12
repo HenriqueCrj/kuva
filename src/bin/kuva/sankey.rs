@@ -123,7 +123,7 @@ pub fn run(args: SankeyArgs) -> Result<(), String> {
     };
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -222,6 +222,22 @@ pub fn run(args: SankeyArgs) -> Result<(), String> {
         for ((source, target), value) in sources.iter().zip(targets.iter()).zip(values.iter()) {
             plot = plot.with_link(source.clone(), target.clone(), *value);
         }
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::SankeyPlot", "kuva::render::layout::TickFormat"],
+                "Sankey",
+                &[crate::emit_code::emit_sankey_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Sankey(plot)];

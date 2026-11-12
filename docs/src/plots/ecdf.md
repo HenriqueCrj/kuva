@@ -240,3 +240,9 @@ kuva ecdf data.tsv --value score --color-by group --smooth
 | `--y-label <S>` | — | Y-axis label |
 | `--log-x` | off | Log scale on x-axis |
 | `--log-y` | off | Log scale on y-axis |
+
+**See also:** [Q-Q Plot](./qq.md) for comparing against a theoretical distribution, [Histogram](./histogram.md) for the binned equivalent, [Density Plot](./density.md) for a smoothed curve.
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, log scale.*

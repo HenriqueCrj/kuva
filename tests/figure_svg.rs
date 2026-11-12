@@ -331,12 +331,16 @@ fn figure_both_axes_negative() {
     common::write_test_output("test_outputs/figure_both_negative.svg", &svg).unwrap();
 
     assert!(svg.contains("<svg"));
-    // x: ticks=5 → auto_nice_range(-5.11, 6.11, 5) → step=2 → (-6, 8) range.
-    // generate_ticks(-6, 8, 5) → step=2.5 → ticks: -5, -2.5, 0, 2.5, 5, 7.5
+    // x: raw range (-5, 6) both land exactly on step=2's grid, so
+    // auto_nice_range_capped (issue #98) caps the padding-only extension at
+    // 5% of the raw span instead of rounding a full extra step onto the
+    // axis: (-6, 6.55) rather than the old (-6, 8).
+    // generate_ticks(-6, 6.55, 5) → step=2.5 → ticks: -5, -2.5, 0, 2.5, 5
     // y: ticks=5 → auto_nice_range(-8.06, -1.94, 5) → step=1 → (-9, -1) range.
     // generate_ticks(-9, -1, 5) → step=2 → ticks: -8, -6, -4, -2
     assert!(svg.contains(">-6<")); // y tick: confirms negative y range
-    assert!(svg.contains(">7.5<")); // max x tick (was ">7<")
+    assert!(svg.contains(">5<")); // max x tick (was ">7.5<" before issue #98's fix)
+    assert!(!svg.contains(">7.5<")); // dead-space tick from the old over-provisioned range must be gone
     assert!(svg.contains(">-8<")); // most-negative y tick
     assert!(svg.contains(">-5<")); // first negative x tick (was ">-1<")
 }
@@ -380,6 +384,39 @@ fn svg_dim(svg: &str, attr: &str) -> f64 {
         + needle.len();
     let end = svg[start..].find('"').unwrap() + start;
     svg[start..end].parse().unwrap()
+}
+
+/// The figure title band and baseline must scale with `title_size`: a fixed 30px
+/// band and y=22 baseline clipped the title once title_size exceeded ~20.
+#[test]
+fn figure_title_band_and_baseline_scale_with_title_size() {
+    let build = |ts: u32| {
+        let scene = Figure::new(1, 1)
+            .with_plots(vec![scatter_plot("blue")])
+            .with_title("TITLEMARK")
+            .with_title_size(ts)
+            .render();
+        SvgBackend.render_scene(&scene)
+    };
+    let small = build(16);
+    let big = build(48);
+
+    // The reserved band grows with title_size, so the whole figure is taller.
+    assert!(
+        svg_dim(&big, "height") > svg_dim(&small, "height"),
+        "title band must scale with title_size (was a fixed 30px)"
+    );
+    // The baseline drops so a 48px title clears its ascenders (~44.5px) instead of
+    // clipping at the old fixed y=22, and scales relative to the small title.
+    let yb = common::text_y(&big, "TITLEMARK");
+    assert!(
+        yb > 44.0,
+        "title_size 48 baseline {yb:.1} must clear ascenders"
+    );
+    assert!(
+        yb > common::text_y(&small, "TITLEMARK"),
+        "baseline must scale with title_size"
+    );
 }
 
 #[test]
@@ -487,6 +524,28 @@ fn figure_size_with_shared_legend() {
     assert_eq!(svg_dim(&svg, "height"), 380.0);
     assert!(svg.contains("Control"));
     assert!(svg.contains("Treatment"));
+}
+
+#[test]
+fn figure_shared_legend_hugs_short_content_no_80px_floor() {
+    // "A" (~43px reserved) and "ABCDE" (~77px reserved) both stay under the old
+    // `.max(80.0)` floor, so pre-fix both would tie at exactly 80px. Real
+    // measurement must still show a difference between them.
+    let short = Figure::new(1, 1)
+        .with_plots(vec![scatter_with_legend("steelblue", "A")])
+        .with_shared_legend();
+    let short_width = svg_dim(&SvgBackend.render_scene(&short.render()), "width");
+
+    let longer = Figure::new(1, 1)
+        .with_plots(vec![scatter_with_legend("steelblue", "ABCDE")])
+        .with_shared_legend();
+    let longer_width = svg_dim(&SvgBackend.render_scene(&longer.render()), "width");
+
+    assert!(
+        longer_width > short_width,
+        "a longer (but still short) shared-legend label should widen the canvas \
+         ({short_width} !< {longer_width}); a stale 80px floor would mask this"
+    );
 }
 
 fn scatter_with_legend(color: &str, label: &str) -> Vec<Plot> {
@@ -789,7 +848,10 @@ fn figure_legend_right_top() {
         svg.contains("Alpha") && svg.contains("Beta"),
         "legend entries missing"
     );
-    assert_eq!(svg_dim(&svg, "width"), 1135.0, "right legend expands width");
+    assert!(
+        (svg_dim(&svg, "width") - 1124.12).abs() < 0.01,
+        "right legend expands width"
+    );
     assert_eq!(
         svg_dim(&svg, "height"),
         400.0,
@@ -804,7 +866,7 @@ fn figure_legend_right_middle() {
         "figure_legend_right_middle",
     );
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
-    assert_eq!(svg_dim(&svg, "width"), 1135.0);
+    assert!((svg_dim(&svg, "width") - 1124.12).abs() < 0.01);
     assert_eq!(svg_dim(&svg, "height"), 400.0);
 }
 
@@ -815,7 +877,7 @@ fn figure_legend_right_bottom() {
         "figure_legend_right_bottom",
     );
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
-    assert_eq!(svg_dim(&svg, "width"), 1135.0);
+    assert!((svg_dim(&svg, "width") - 1124.12).abs() < 0.01);
     assert_eq!(svg_dim(&svg, "height"), 400.0);
 }
 
@@ -828,7 +890,10 @@ fn figure_legend_left_top() {
         svg.contains("Alpha") && svg.contains("Beta"),
         "legend entries missing"
     );
-    assert_eq!(svg_dim(&svg, "width"), 1135.0, "left legend expands width");
+    assert!(
+        (svg_dim(&svg, "width") - 1124.12).abs() < 0.01,
+        "left legend expands width"
+    );
     assert_eq!(
         svg_dim(&svg, "height"),
         400.0,
@@ -843,7 +908,7 @@ fn figure_legend_left_middle() {
         "figure_legend_left_middle",
     );
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
-    assert_eq!(svg_dim(&svg, "width"), 1135.0);
+    assert!((svg_dim(&svg, "width") - 1124.12).abs() < 0.01);
     assert_eq!(svg_dim(&svg, "height"), 400.0);
 }
 
@@ -854,7 +919,7 @@ fn figure_legend_left_bottom() {
         "figure_legend_left_bottom",
     );
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
-    assert_eq!(svg_dim(&svg, "width"), 1135.0);
+    assert!((svg_dim(&svg, "width") - 1124.12).abs() < 0.01);
     assert_eq!(svg_dim(&svg, "height"), 400.0);
 }
 
@@ -872,7 +937,7 @@ fn figure_legend_top_left() {
         1035.0,
         "top legend does not expand width"
     );
-    assert_eq!(svg_dim(&svg, "height"), 476.0, "top legend expands height");
+    assert_eq!(svg_dim(&svg, "height"), 470.0, "top legend expands height");
 }
 
 #[test]
@@ -880,7 +945,7 @@ fn figure_legend_top_center() {
     let svg = render_legend_pos(FigureLegendPosition::TopCenter, "figure_legend_top_center");
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
     assert_eq!(svg_dim(&svg, "width"), 1035.0);
-    assert_eq!(svg_dim(&svg, "height"), 476.0);
+    assert_eq!(svg_dim(&svg, "height"), 470.0);
 }
 
 #[test]
@@ -888,7 +953,7 @@ fn figure_legend_top_right() {
     let svg = render_legend_pos(FigureLegendPosition::TopRight, "figure_legend_top_right");
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
     assert_eq!(svg_dim(&svg, "width"), 1035.0);
-    assert_eq!(svg_dim(&svg, "height"), 476.0);
+    assert_eq!(svg_dim(&svg, "height"), 470.0);
 }
 
 // ── Bottom edge ───────────────────────────────────────────────────────────────
@@ -910,7 +975,7 @@ fn figure_legend_bottom_left() {
     );
     assert_eq!(
         svg_dim(&svg, "height"),
-        476.0,
+        470.0,
         "bottom legend expands height"
     );
 }
@@ -923,7 +988,7 @@ fn figure_legend_bottom_center() {
     );
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
     assert_eq!(svg_dim(&svg, "width"), 1035.0);
-    assert_eq!(svg_dim(&svg, "height"), 476.0);
+    assert_eq!(svg_dim(&svg, "height"), 470.0);
 }
 
 #[test]
@@ -934,17 +999,17 @@ fn figure_legend_bottom_right() {
     );
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
     assert_eq!(svg_dim(&svg, "width"), 1035.0);
-    assert_eq!(svg_dim(&svg, "height"), 476.0);
+    assert_eq!(svg_dim(&svg, "height"), 470.0);
 }
 
 // ── Legend height scales with body_size ─────────────────────────────────────
 //
-// Regression for the hardcoded `18.0` in render_legend_at and figure.rs.
-// With body_size=16: line_height = 16*1.5 = 24 (not 18).
-// Legend entries "Alpha"/"Beta" (2 entries):
-//   legend_height = 2*24+20 = 68   (was 2*18+20 = 56 at default body_size=12)
+// Regression for a fixed legend row height decoupled from body_size. Legend rows
+// use ~1.5em leading and the box hugs the content, both scaling with body_size:
+//   row = 16 * 1.5 = 24;  box = 2*24 + 2*10 - (24 - 12) = 56
+//   (the hug subtracts one row's leading below the last entry; padding = 10)
 //   legend_spacing = 20
-// Top legend: total height = 400 + 68 + 20 = 488  (was 476 at body_size=12)
+// Top legend: total height = 400 + 56 + 20 = 476.0
 
 #[test]
 fn figure_legend_height_scales_with_body_size() {
@@ -963,8 +1028,8 @@ fn figure_legend_height_scales_with_body_size() {
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
     assert_eq!(
         svg_dim(&svg, "height"),
-        488.0,
-        "legend height must scale with body_size (16*1.5=24 per entry, 2*24+20=68 + 20 spacing)"
+        476.0,
+        "legend height must scale with body_size (row=16*1.5=24, box=2*24+20-(24-12)=56, + 20 spacing)"
     );
 }
 
@@ -975,7 +1040,7 @@ fn figure_legend_right_compat() {
     // `Right` is a backward-compat alias for `RightMiddle` — same dimensions and entries.
     let svg = render_legend_pos(FigureLegendPosition::Right, "figure_legend_right_compat");
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
-    assert_eq!(svg_dim(&svg, "width"), 1135.0);
+    assert!((svg_dim(&svg, "width") - 1124.12).abs() < 0.01);
     assert_eq!(svg_dim(&svg, "height"), 400.0);
 }
 
@@ -985,20 +1050,22 @@ fn figure_legend_bottom_compat() {
     let svg = render_legend_pos(FigureLegendPosition::Bottom, "figure_legend_bottom_compat");
     assert!(svg.contains("Alpha") && svg.contains("Beta"));
     assert_eq!(svg_dim(&svg, "width"), 1035.0);
-    assert_eq!(svg_dim(&svg, "height"), 476.0);
+    assert_eq!(svg_dim(&svg, "height"), 470.0);
 }
 
 // ── Left/Top offsets actually shift the grid ─────────────────────────────────
 //
 // For Left positions the grid cells must be offset rightward by
-// (legend_width + legend_spacing) = 100 px.  A cell that would normally start
-// at x = padding = 10 should now start at x = 110.  We verify this by
-// checking that the `translate(110,…)` group appears in the SVG.
+// (legend_width + legend_spacing), where legend_width is now measured from the
+// real "Alpha"/"Beta" label widths (~69.12px) rather than the old 80px floor.
+// A cell that would normally start at x = padding = 10 should now start at
+// x ≈ 99.12.  We verify this by checking that a `translate(99.1...,` group
+// appears in the SVG.
 //
 // For Top positions the grid cells must be offset downward by
-// (legend_height + legend_spacing) = 76 px.  Cell y normally starts at
-// y = padding = 10, so with top legend it should be y = 86.
-// We verify `translate(…,86)` appears.
+// (legend_height + legend_spacing) = 70 px.  Cell y normally starts at
+// y = padding = 10, so with top legend it should be y = 80.
+// We verify `translate(…,80)` appears.
 
 #[test]
 fn figure_legend_left_grid_offset() {
@@ -1006,10 +1073,10 @@ fn figure_legend_left_grid_offset() {
         FigureLegendPosition::LeftMiddle,
         "figure_legend_left_offset_check",
     );
-    // Cell 0 translate: x = cell_x_offset(100) + padding(10) + col(0)*(500+15) = 110
+    // Cell 0 translate: x = cell_x_offset(~89.12) + padding(10) ≈ 99.12
     assert!(
-        svg.contains("translate(110,"),
-        "left legend should shift grid cells right by 100px"
+        svg.contains("translate(99.1"),
+        "left legend should shift grid cells right to make room for the measured legend width"
     );
 }
 
@@ -1019,10 +1086,10 @@ fn figure_legend_top_grid_offset() {
         FigureLegendPosition::TopCenter,
         "figure_legend_top_offset_check",
     );
-    // Cell 0 translate: x=10, y = cell_y_offset(76) + padding(10) + figure_title(0) = 86
+    // Cell 0 translate: x=10, y = legend_height(50) + spacing(20) + padding(10) = 80
     assert!(
-        svg.contains(",86)"),
-        "top legend should shift grid cells down by 76px"
+        svg.contains(",80)"),
+        "top legend should shift grid cells down by legend_height + spacing"
     );
 }
 

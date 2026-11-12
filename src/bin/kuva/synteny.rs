@@ -46,7 +46,7 @@ pub fn run(args: SyntenyArgs) -> Result<(), String> {
     // Primary input file: sequences TSV (name, length).
     let seqs_table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &[],
     )?;
@@ -54,7 +54,7 @@ pub fn run(args: SyntenyArgs) -> Result<(), String> {
     // Blocks file.
     let blocks_table = DataTable::parse(
         Some(args.blocks_file.as_path()),
-        false,
+        args.input.header_mode(),
         args.input.delimiter,
         &[],
     )?;
@@ -140,6 +140,22 @@ pub fn run(args: SyntenyArgs) -> Result<(), String> {
     }
     if let Some(ref label) = args.legend {
         plot = plot.with_legend(label.clone());
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::SyntenyPlot"],
+                "Synteny",
+                &[crate::emit_code::emit_synteny_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Synteny(plot)];

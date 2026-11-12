@@ -18,7 +18,7 @@ This lets a Dioxus 0.7 app render a kuva plot through the real virtual DOM:
 It is **off by default**. Enabling it pulls in only `dioxus` (the `macro`, `html`,
 and `signals` features — no web/desktop renderer), so the WebAssembly dependency
 surface stays minimal and never drags in the native-only deps (`fontdue`, `png`,
-`flate2`, `svg2pdf`, `clap`, `arrow`). A CI job guards the
+`flate2`, `krilla`, `usvg`, `typst`, `clap`, `arrow`). A CI job guards the
 `wasm32-unknown-unknown` build against any such leak.
 
 ## Enabling it

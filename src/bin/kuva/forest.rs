@@ -77,7 +77,7 @@ pub fn run(args: ForestArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -147,6 +147,22 @@ pub fn run(args: ForestArgs) -> Result<(), String> {
         for (((label, est), lo), hi) in rows {
             plot = plot.with_row(label.as_str(), est, lo, hi);
         }
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::ForestPlot"],
+                "Forest",
+                &[crate::emit_code::emit_forest_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Forest(plot)];

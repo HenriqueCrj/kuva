@@ -50,7 +50,7 @@ pub fn run(args: StackedAreaArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -91,6 +91,22 @@ pub fn run(args: StackedAreaArgs) -> Result<(), String> {
 
         let color = palette[i].to_string();
         plot = plot.with_series(ys).with_color(color).with_legend(name);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::StackedAreaPlot"],
+                "StackedArea",
+                &[crate::emit_code::emit_stacked_area_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::StackedArea(plot)];

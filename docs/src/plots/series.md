@@ -125,3 +125,5 @@ let series = SeriesPlot::new()
 | `.with_stroke_width(f)` | Line thickness in pixels (default `2.0`) |
 | `.with_point_radius(f)` | Circle radius in pixels (default `3.0`) |
 | `.with_legend(s)` | Add a legend entry with this label |
+
+**See also:** [Line Plot](./line.md) for a single series, [Band Plot](./band.md) for confidence bands per series, [Twin-Y Plot](./twin_y.md) for series on independent scales.

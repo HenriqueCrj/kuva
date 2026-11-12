@@ -1,0 +1,6 @@
+task	start	end	phase	progress	milestone
+Wireframes	0	3	Design	1.0	no
+Prototyping	2	5	Design	0.6	no
+Backend API	3	8	Dev	0.4	no
+Frontend	4	9	Dev	0.1	no
+Launch	10	10	Dev	0	yes

@@ -14,10 +14,11 @@
 //!   - Clip rects and translate transforms fully respected
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 use fontdue::{Font, FontSettings, Metrics};
+use std::sync::OnceLock;
 
+use crate::plot::FillPattern;
 use crate::render::color::Color as KColor;
 use crate::render::render::{Primitive, Scene, TextAnchor};
 
@@ -98,6 +99,39 @@ impl Canvas {
         }
     }
 
+    /// Alpha-blend a premultiplied-RGBA pixmap (as produced by typst-render)
+    /// into the canvas with its top-left corner at device pixel (dx, dy),
+    /// clipped to `clip`. Used by the math feature to composite rendered
+    /// `$...$` regions.
+    #[cfg(feature = "typst-math")]
+    fn blit_pixmap(&mut self, src: &crate::render::math::MathPixmap, dx: i32, dy: i32, clip: Clip) {
+        let sw = src.width_px as i32;
+        let sh = src.height_px as i32;
+        for row in 0..sh {
+            let py = dy + row;
+            if py < clip.y0 || py >= clip.y1 {
+                continue;
+            }
+            for col in 0..sw {
+                let px = dx + col;
+                if px < clip.x0 || px >= clip.x1 {
+                    continue;
+                }
+                let si = ((row * sw + col) * 4) as usize;
+                let a = src.rgba[si + 3];
+                if a == 0 {
+                    continue;
+                }
+                // typst-render outputs premultiplied RGBA; un-premultiply to
+                // straight color for blend() (which expects straight rgb +
+                // coverage). For fully/partly transparent black math this
+                // keeps edges anti-aliased correctly.
+                let (r, g, b) = unpremultiply(src.rgba[si], src.rgba[si + 1], src.rgba[si + 2], a);
+                self.blend(px, py, Rgba { r, g, b, a: 255 }, a as f32 * (1.0 / 255.0));
+            }
+        }
+    }
+
     /// Composite `color` at `cov` coverage over the pixel at (x, y).
     /// The background is always opaque after `fill_background`, so dst_a == 255
     /// always, collapsing the Porter-Duff "src over" formula to:
@@ -151,6 +185,49 @@ impl Canvas {
                 let xc = partial_cov(x, x + w, px);
                 if xc > 0.0 {
                     self.blend(px, py, c, xc * yc);
+                }
+            }
+        }
+    }
+
+    /// Like [`Canvas::fill_rect`], but rasterizes a BW-mode hatch pattern
+    /// instead of a flat color. `x, y, w, h` are screen-space (already scaled
+    /// and translated); `tx, ty, s` invert that transform per-pixel so the
+    /// pattern is sampled in the same local coordinate space the SVG backend's
+    /// `patternUnits="userSpaceOnUse"` tile would use.
+    #[allow(clippy::too_many_arguments)]
+    fn fill_rect_patterned(
+        &mut self,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        tx: f32,
+        ty: f32,
+        s: f32,
+        pattern: FillPattern,
+        clip: Clip,
+    ) {
+        let x0 = (x.floor() as i32).max(clip.x0);
+        let y0 = (y.floor() as i32).max(clip.y0);
+        let x1 = ((x + w).ceil() as i32).min(clip.x1);
+        let y1 = ((y + h).ceil() as i32).min(clip.y1);
+        let black = Rgba::opaque(0, 0, 0);
+        for py in y0..y1 {
+            let yc = partial_cov(y, y + h, py);
+            if yc <= 0.0 {
+                continue;
+            }
+            let local_y = py as f32 / s - ty;
+            for px in x0..x1 {
+                let xc = partial_cov(x, x + w, px);
+                if xc <= 0.0 {
+                    continue;
+                }
+                let local_x = px as f32 / s - tx;
+                let hatch = pattern.hatch_coverage(local_x, local_y);
+                if hatch > 0.0 {
+                    self.blend(px, py, black, xc * yc * hatch);
                 }
             }
         }
@@ -592,8 +669,36 @@ impl Canvas {
     // even-odd fill.
 
     fn fill_polygon(&mut self, pts: &[(f32, f32)], c: Rgba, clip: Clip) {
+        for (span_start, span_end, py) in Self::polygon_spans(pts, clip) {
+            self.fill_span_aa(span_start, span_end, py, c, clip);
+        }
+    }
+
+    /// Like [`Canvas::fill_polygon`], but rasterizes a BW-mode hatch pattern
+    /// instead of a flat color. `tx, ty, s` invert the screen-space transform
+    /// per-pixel so the pattern samples in the same local coordinate space an
+    /// SVG `patternUnits="userSpaceOnUse"` tile would use.
+    fn fill_polygon_patterned(
+        &mut self,
+        pts: &[(f32, f32)],
+        tx: f32,
+        ty: f32,
+        s: f32,
+        pattern: FillPattern,
+        clip: Clip,
+    ) {
+        for (span_start, span_end, py) in Self::polygon_spans(pts, clip) {
+            self.fill_span_aa_patterned(span_start, span_end, py, tx, ty, s, pattern, clip);
+        }
+    }
+
+    /// AET scanline fill (nonzero winding rule): computes the filled
+    /// `(span_start, span_end, row)` spans of `pts` without touching pixels,
+    /// so callers can fill them with either a flat color or a pattern.
+    fn polygon_spans(pts: &[(f32, f32)], clip: Clip) -> Vec<(f32, f32, i32)> {
+        let mut spans = Vec::new();
         if pts.len() < 3 {
-            return;
+            return spans;
         }
 
         let y_lo = pts.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
@@ -601,7 +706,7 @@ impl Canvas {
         let scan_y0 = (y_lo.floor() as i32).max(clip.y0);
         let scan_y1 = (y_hi.ceil() as i32).min(clip.y1 - 1);
         if scan_y0 > scan_y1 {
-            return;
+            return spans;
         }
 
         struct AetEdge {
@@ -676,7 +781,7 @@ impl Canvas {
                     if !was_inside && is_inside {
                         span_start = x;
                     } else if was_inside && !is_inside {
-                        self.fill_span_aa(span_start, x, py, c, clip);
+                        spans.push((span_start, x, py));
                     }
                 }
             }
@@ -685,6 +790,8 @@ impl Canvas {
                 e.x += e.inv_slope;
             }
         }
+
+        spans
     }
 
     /// Fill the horizontal span [x_lo, x_hi] at scanline row `py`.
@@ -719,6 +826,62 @@ impl Canvas {
         let right_cov = x_hi - ix_hi as f32;
         if right_cov > 0.0 {
             self.blend_c(ix_hi, py, c, right_cov.min(1.0), clip);
+        }
+    }
+
+    /// Like [`Canvas::fill_span_aa`], but samples a BW-mode hatch pattern per
+    /// pixel instead of blending a flat color. See [`Canvas::fill_rect_patterned`]
+    /// for the `tx, ty, s` local-coordinate inversion.
+    #[inline]
+    #[allow(clippy::too_many_arguments)]
+    fn fill_span_aa_patterned(
+        &mut self,
+        x_lo: f32,
+        x_hi: f32,
+        py: i32,
+        tx: f32,
+        ty: f32,
+        s: f32,
+        pattern: FillPattern,
+        clip: Clip,
+    ) {
+        if x_hi <= x_lo {
+            return;
+        }
+        let black = Rgba::opaque(0, 0, 0);
+        let local_y = py as f32 / s - ty;
+
+        let ix_lo = x_lo.floor() as i32;
+        let ix_hi = x_hi.floor() as i32;
+        let blend_hatch = |canvas: &mut Self, px: i32, edge_cov: f32| {
+            let local_x = px as f32 / s - tx;
+            let hatch = pattern.hatch_coverage(local_x, local_y);
+            if hatch > 0.0 {
+                canvas.blend_c(px, py, black, edge_cov * hatch, clip);
+            }
+        };
+
+        if ix_lo == ix_hi {
+            let cov = (x_hi - x_lo).min(1.0);
+            blend_hatch(self, ix_lo, cov);
+            return;
+        }
+
+        // Left partial pixel: how much of [ix_lo, ix_lo+1) is right of x_lo
+        let left_cov = ((ix_lo + 1) as f32 - x_lo).min(1.0);
+        blend_hatch(self, ix_lo, left_cov);
+
+        // Interior
+        let int_lo = (ix_lo + 1).max(clip.x0);
+        let int_hi = ix_hi.min(clip.x1);
+        for px in int_lo..int_hi {
+            blend_hatch(self, px, 1.0);
+        }
+
+        // Right partial pixel: how much of [ix_hi, ix_hi+1) is left of x_hi
+        let right_cov = x_hi - ix_hi as f32;
+        if right_cov > 0.0 {
+            blend_hatch(self, ix_hi, right_cov.min(1.0));
         }
     }
 
@@ -815,6 +978,10 @@ impl Canvas {
         clip: Clip,
     ) {
         let text_w = measure_text(text, size, font, cache);
+        // Offscreen buffer height for rotated text. 1.5em deliberately over-provisions
+        // the real line box (ascent+descent ≈ 1.16em for the bundled font) so tall
+        // accented caps never clip; the 0.3em baseline-from-bottom below likewise
+        // exceeds the real descent (≈0.24em). Safe bounds, not exact metrics.
         let text_h = size * 1.5;
         let pad = 2.0f32;
 
@@ -897,6 +1064,94 @@ impl Canvas {
         }
     }
 
+    /// Blit a whole-label math pixmap at an arbitrary rotation.
+    ///
+    /// The pixmap (premultiplied RGBA from typst-render) already *is* the
+    /// rendered label, so we treat it as the source buffer directly:
+    /// inverse-rotation bilinear-sample it into the canvas around the anchor
+    /// point `(anchor_x, anchor_y)`. The pixmap's anchor is at
+    /// `(off_ax, baseline_offset_px)`, where `off_ax` depends on text anchor.
+    #[cfg(feature = "typst-math")]
+    fn blit_pixmap_rotated(
+        &mut self,
+        pm: &crate::render::math::MathPixmap,
+        anchor_x: f32,
+        anchor_y: f32,
+        anchor: TextAnchor,
+        angle_deg: f32,
+        clip: Clip,
+    ) {
+        let w = pm.width_px as f32;
+        let h = pm.height_px as f32;
+        let off_ax = match anchor {
+            TextAnchor::Start => 0.0,
+            TextAnchor::Middle => w * 0.5,
+            TextAnchor::End => w,
+        };
+        let off_ay = pm.baseline_offset_px as f32;
+
+        let rad = angle_deg * std::f32::consts::PI / 180.0;
+        let cos_a = rad.cos();
+        let sin_a = rad.sin();
+
+        // Bounding box of the rotated pixmap in canvas space.
+        let corners = [(0.0f32, 0.0f32), (w, 0.0f32), (w, h), (0.0f32, h)];
+        let mut min_x = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+        for (cx, cy) in &corners {
+            let dx = cx - off_ax;
+            let dy = cy - off_ay;
+            let wx = anchor_x + cos_a * dx - sin_a * dy;
+            let wy = anchor_y + sin_a * dx + cos_a * dy;
+            min_x = min_x.min(wx);
+            max_x = max_x.max(wx);
+            min_y = min_y.min(wy);
+            max_y = max_y.max(wy);
+        }
+
+        // Keep the rotated label inside the clip. A tall math label (e.g. a
+        // rotated y-axis title with a superscript) can have a cross-extent
+        // wider than the reserved margin and would otherwise clip glyphs at
+        // the canvas edge — nudge it inward instead.
+        let shift_x = (clip.x0 as f32 - min_x).max(0.0);
+        let shift_y = (clip.y0 as f32 - min_y).max(0.0);
+        let anchor_x = anchor_x + shift_x;
+        let anchor_y = anchor_y + shift_y;
+        min_x += shift_x;
+        max_x += shift_x;
+        min_y += shift_y;
+        max_y += shift_y;
+
+        let dx0 = (min_x.floor() as i32).max(clip.x0);
+        let dx1 = (max_x.ceil() as i32).min(clip.x1 - 1);
+        let dy0 = (min_y.floor() as i32).max(clip.y0);
+        let dy1 = (max_y.ceil() as i32).min(clip.y1 - 1);
+
+        for dy in dy0..=dy1 {
+            for dx in dx0..=dx1 {
+                let dxw = dx as f32 + 0.5 - anchor_x;
+                let dyw = dy as f32 + 0.5 - anchor_y;
+                let src_x = off_ax + cos_a * dxw + sin_a * dyw;
+                let src_y = off_ay - sin_a * dxw + cos_a * dyw;
+                // Bilinear over premultiplied RGBA, then un-premultiply for blend.
+                let s = bilinear_rgba(
+                    &pm.rgba,
+                    pm.width_px,
+                    pm.height_px,
+                    src_x - 0.5,
+                    src_y - 0.5,
+                );
+                if s.a == 0 {
+                    continue;
+                }
+                let (r, g, b) = unpremultiply(s.r, s.g, s.b, s.a);
+                self.blend(dx, dy, Rgba { r, g, b, a: 255 }, s.a as f32 * (1.0 / 255.0));
+            }
+        }
+    }
+
     // ── PNG encode ────────────────────────────────────────────────────────────
 
     fn encode_png(self) -> Result<Vec<u8>, String> {
@@ -904,6 +1159,8 @@ impl Canvas {
         let mut enc = png::Encoder::new(std::io::Cursor::new(&mut buf), self.width, self.height);
         enc.set_color(png::ColorType::Rgba);
         enc.set_depth(png::BitDepth::Eight);
+        // Standard "Software" text chunk recording the kuva version (best-effort).
+        let _ = enc.add_text_chunk("Software".to_string(), format!("kuva {}", crate::VERSION));
         enc.write_header()
             .and_then(|mut w| w.write_image_data(&self.pixels))
             .map_err(|e| e.to_string())?;
@@ -1447,6 +1704,24 @@ fn parse_dasharray(s: &str) -> Vec<f32> {
 }
 
 /// Bilinear RGBA sample from a pixel buffer. Returns (0,0,0,0) for out-of-bounds.
+/// Un-premultiply a premultiplied-alpha pixel to straight RGB. typst-render
+/// outputs premultiplied RGBA; `blend()` expects straight color + coverage.
+/// Callers must ensure `a > 0`.
+#[cfg(feature = "typst-math")]
+#[inline]
+fn unpremultiply(r: u8, g: u8, b: u8, a: u8) -> (u8, u8, u8) {
+    if a == 255 {
+        (r, g, b)
+    } else {
+        let af = a as u32;
+        (
+            (r as u32 * 255 / af).min(255) as u8,
+            (g as u32 * 255 / af).min(255) as u8,
+            (b as u32 * 255 / af).min(255) as u8,
+        )
+    }
+}
+
 fn bilinear_rgba(pixels: &[u8], w: u32, h: u32, x: f32, y: f32) -> Rgba {
     let x0 = x.floor() as i32;
     let y0 = y.floor() as i32;
@@ -1500,6 +1775,20 @@ fn kcolor_to_rgba(c: &KColor) -> Option<Rgba> {
 
 fn css_to_rgba(s: &str) -> Option<Rgba> {
     kcolor_to_rgba(&KColor::from(s))
+}
+
+/// If `c` is a `fill="url(#kuva-fp-...)"` reference to one of `bw.rs`'s hatch
+/// patterns, returns the pattern. The raster backend can't resolve an SVG
+/// `<pattern>` paint server, so BW-mode pattern overlays are rasterized
+/// directly via [`FillPattern::hatch_coverage`] instead.
+fn pattern_from_fill(c: &KColor) -> Option<FillPattern> {
+    match c {
+        KColor::Css(s) => {
+            let id = s.strip_prefix("url(#")?.strip_suffix(')')?;
+            FillPattern::from_id(id)
+        }
+        _ => None,
+    }
 }
 
 // ── Transform stack helper ────────────────────────────────────────────────────
@@ -1653,6 +1942,8 @@ impl RasterBackend {
                             rgba
                         };
                         canvas.fill_rect(fx, fy, fw, fh, rgba, clip);
+                    } else if let Some(pattern) = pattern_from_fill(fill) {
+                        canvas.fill_rect_patterned(fx, fy, fw, fh, tx, ty, s, pattern, clip);
                     }
                     if let Some(sc) = stroke {
                         if let Some(sc_rgba) = kcolor_to_rgba(sc) {
@@ -1819,6 +2110,17 @@ impl RasterBackend {
                             for sub in &subs {
                                 canvas.fill_polygon(&transform_pts(sub), rgba, clip);
                             }
+                        } else if let Some(pattern) = pattern_from_fill(fc) {
+                            for sub in &subs {
+                                canvas.fill_polygon_patterned(
+                                    &transform_pts(sub),
+                                    tx,
+                                    ty,
+                                    s,
+                                    pattern,
+                                    clip,
+                                );
+                            }
                         }
                     }
 
@@ -1913,9 +2215,52 @@ impl RasterBackend {
                         .as_ref()
                         .and_then(kcolor_to_rgba)
                         .unwrap_or(default_text);
-                    // Lower any `$...$` math regions to inline Unicode
-                    // (σ², a/b, √(…)) so they draw through the normal glyph
-                    // path. No-op for plain labels.
+                    // Math routing: typst tier (feature `typst-math`) renders the
+                    // whole label to a pixmap and composites it; otherwise the
+                    // always-on lookup tier lowers `$...$` to inline Unicode
+                    // text drawn through the normal glyph path.
+                    #[cfg(feature = "typst-math")]
+                    if crate::render::math::contains_math(content) {
+                        if let Some(pm) = crate::render::math::render_label_pixmap(
+                            content,
+                            *size as f64,
+                            color.as_ref(),
+                            s,
+                        ) {
+                            if let Some(angle) = rotate {
+                                canvas.blit_pixmap_rotated(
+                                    &pm,
+                                    sx!(*x),
+                                    sy!(*y),
+                                    *anchor,
+                                    *angle as f32,
+                                    clip,
+                                );
+                            } else {
+                                // Anchor horizontally by pixmap width; align
+                                // baseline to the label's y.
+                                let shift = match anchor {
+                                    TextAnchor::Start => 0.0,
+                                    TextAnchor::Middle => -(pm.width_px as f32) * 0.5,
+                                    TextAnchor::End => -(pm.width_px as f32),
+                                };
+                                let dx = (sx!(*x) + shift).round() as i32;
+                                let dy = (sy!(*y) - pm.baseline_offset_px as f32).round() as i32;
+                                // Nudge inward if the label would overflow the
+                                // top/left clip edge, matching the rotated and
+                                // SVG paths (otherwise a wide label near the
+                                // edge clips instead of shifting).
+                                let dx = dx.max(clip.x0);
+                                let dy = dy.max(clip.y0);
+                                canvas.blit_pixmap(&pm, dx, dy, clip);
+                            }
+                            continue;
+                        }
+                        // Compile failed — fall through to the lookup tier.
+                    }
+
+                    // Lookup tier (or plain text); needs_rewrite also catches
+                    // escaped `\$`.
                     let lowered;
                     let content: &str = if crate::render::math::needs_rewrite(content) {
                         lowered = crate::render::math::to_unicode(content);
@@ -1951,10 +2296,55 @@ impl RasterBackend {
                         .unwrap_or(default_text);
                     let sz = *size as f32 * s;
 
-                    // Compute total width for anchor alignment using metrics (no cache needed).
-                    let total_w: f32 = spans
+                    // Typeset math spans up front (typst tier): the pixmap
+                    // width feeds anchor alignment, and the same pixmap is
+                    // blitted in the pen loop. A failed compile leaves None
+                    // and the span degrades to lookup-tier text below.
+                    #[cfg(feature = "typst-math")]
+                    let math_frags: Vec<
+                        Option<crate::render::math::MathPixmap>,
+                    > = spans
                         .iter()
                         .map(|sp| {
+                            if sp.math {
+                                crate::render::math::render_label_pixmap(
+                                    &format!("${}$", sp.text),
+                                    *size as f64,
+                                    color.as_ref(),
+                                    s,
+                                )
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    // Lookup-tier text for math spans whose fragment is
+                    // unavailable (compile failure, or no `typst-math` feature —
+                    // in which case spans never carry math anyway).
+                    let lowered_math = |sp: &crate::render::render::TextSpan| {
+                        crate::render::math::to_unicode(&format!("${}$", sp.text))
+                    };
+
+                    // Compute total width for anchor alignment using metrics (no cache needed).
+                    // (the index is only read when `typst-math` is compiled in)
+                    #[allow(clippy::unused_enumerate_index)]
+                    let total_w: f32 = spans
+                        .iter()
+                        .enumerate()
+                        .map(|(_i, sp)| {
+                            if sp.math {
+                                #[cfg(feature = "typst-math")]
+                                if let Some(pm) = &math_frags[_i] {
+                                    // Advance minus the fragment's baked-in
+                                    // margin (see math::FRAGMENT_MARGIN_EM).
+                                    let margin = (crate::render::math::FRAGMENT_MARGIN_EM
+                                        * *size as f64)
+                                        as f32
+                                        * s;
+                                    return (pm.width_px as f32 - 2.0 * margin).max(1.0);
+                                }
+                                return measure_text_direct(&lowered_math(sp), sz, font);
+                            }
                             let f = if sp.bold {
                                 shared_font_bold()
                             } else if sp.code {
@@ -1975,7 +2365,43 @@ impl RasterBackend {
                     };
 
                     let mut pen_x = start_x;
-                    for sp in spans {
+                    #[allow(clippy::unused_enumerate_index)]
+                    for (_i, sp) in spans.iter().enumerate() {
+                        if sp.math {
+                            #[cfg(feature = "typst-math")]
+                            if let Some(pm) = &math_frags[_i] {
+                                // Blit at the shared baseline, shifted a
+                                // margin early; advance minus both margins so
+                                // the fragment spaces like a word.
+                                let margin =
+                                    (crate::render::math::FRAGMENT_MARGIN_EM * *size as f64) as f32
+                                        * s;
+                                let dx = (pen_x - margin).round() as i32;
+                                let dy = (sy!(*y) - pm.baseline_offset_px as f32).round() as i32;
+                                let dx = dx.max(clip.x0);
+                                let dy = dy.max(clip.y0);
+                                canvas.blit_pixmap(pm, dx, dy, clip);
+                                pen_x += (pm.width_px as f32 - 2.0 * margin).max(1.0);
+                                continue;
+                            }
+                            // Fallback: draw the lookup-tier form as text.
+                            let lowered = lowered_math(sp);
+                            let w = measure_text_direct(&lowered, sz, font);
+                            canvas.draw_text(
+                                pen_x,
+                                sy!(*y),
+                                &lowered,
+                                sz,
+                                rgba,
+                                TextAnchor::Start,
+                                None,
+                                font,
+                                &mut glyph_cache,
+                                clip,
+                            );
+                            pen_x += w;
+                            continue;
+                        }
                         // Draw with the appropriate font/cache; advance pen by span width.
                         let w = if sp.bold {
                             let w = measure_text_direct(&sp.text, sz, shared_font_bold());

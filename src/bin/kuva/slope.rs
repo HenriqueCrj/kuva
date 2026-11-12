@@ -74,7 +74,7 @@ pub fn run(args: SlopeArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -126,6 +126,22 @@ pub fn run(args: SlopeArgs) -> Result<(), String> {
 
     for ((label, before), after) in labels.iter().zip(befores).zip(afters) {
         plot = plot.with_point(label.as_str(), before, after);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::SlopePlot"],
+                "Slope",
+                &[crate::emit_code::emit_slope_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Slope(plot)];

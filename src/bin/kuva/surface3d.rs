@@ -101,7 +101,7 @@ pub fn run(args: Surface3DArgs) -> Result<(), String> {
     };
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -256,6 +256,22 @@ pub fn run(args: Surface3DArgs) -> Result<(), String> {
     }
     if let Some(n) = args.grid_lines {
         plot = plot.with_grid_lines(n);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::Surface3DPlot", "kuva::plot::ColorMap"],
+                "Surface3D",
+                &[crate::emit_code::emit_surface3d_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Surface3D(plot)];

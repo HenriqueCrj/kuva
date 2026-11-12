@@ -1,0 +1,170 @@
+/* kuva docs — shared site-wide styles, layered on top of mdBook's default
+   theme via `additional-css` (see `book.toml`). Started life as the inline
+   <style> block on gallery.md; pulled out here so every page can use the
+   same card-grid treatment as the redesign progresses. */
+
+/* ── Brand accent ──────────────────────────────────────────────────────────
+   A teal accent, distinct from every built-in mdBook theme's own accent
+   (light/coal/navy all lean blue, rust/ayu lean orange) so it reads as
+   kuva's own identity rather than clashing with whichever theme the reader
+   has picked. Defined per theme selector — not a flat override — so it still
+   has enough contrast against each theme's background; darker teal on the
+   light backgrounds (light, rust), brighter teal on the dark ones
+   (coal, navy, ayu). */
+:root {
+  --kuva-accent: #0d9488;
+  --kuva-accent-soft: rgba(13, 148, 136, 0.12);
+}
+.coal, .navy, .ayu {
+  --kuva-accent: #2dd4bf;
+  --kuva-accent-soft: rgba(45, 212, 191, 0.14);
+}
+
+/* ── Headings ────────────────────────────────────────────────────────────
+   Subtle structure cues, not a font change — mdBook's bundled "Open Sans"
+   stack stays as-is (self-hosted, no network dependency, matches the
+   library's own bundled-font philosophy). mdBook renders *two* <h1>s per
+   page: the sticky top-bar site title (`<h1 class="menu-title">kuva</h1>`,
+   present on every page) and the page's own content title (e.g. `<h1
+   id="gallery">Gallery</h1>`). The accent bar belongs only on the latter —
+   on the sticky menu title it repeated on every single page and read as too
+   heavy — so this scopes to `main h1` and explicitly excludes `.menu-title`. */
+main h1:not(.menu-title) {
+  border-bottom: 2px solid var(--kuva-accent);
+  padding-bottom: 0.3em;
+}
+h2 {
+  border-left: 4px solid var(--kuva-accent);
+  padding-left: 0.6em;
+}
+
+/* ── Collapsible sidebar categories ─────────────────────────────────────────
+   Behavior lives in `theme/custom.js` (mdBook's own expand/collapse only
+   covers nested chapters like the CLI subcommand list, not these flat
+   `# Category` part-titles). This just renders the two states it toggles:
+   a rotating chevron on the part-title, and `display: none` on the
+   category's items while collapsed. */
+li.part-title.kuva-toggle {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 1.4em;
+}
+li.part-title.kuva-toggle::after {
+  content: "\276F"; /* ❯ */
+  position: absolute;
+  right: 0.4em;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7em;
+  color: var(--kuva-accent);
+  transition: transform 0.15s;
+}
+li.part-title.kuva-toggle.kuva-open::after {
+  transform: translateY(-50%) rotate(90deg);
+}
+.chapter-item.kuva-collapsed {
+  display: none;
+}
+
+/* ── Search UI ────────────────────────────────────────────────────────────
+   Two presentations of the same single search input (behavior lives in
+   `theme/custom.js`): a compact always-visible box at the top of the
+   sidebar on every normal page, and a full-width version on the dedicated
+   `search.html` page for reading through result stubs without the sidebar's
+   width squeeze. The top-bar icon now navigates to that page instead of
+   toggling the sidebar box in place. */
+#mdbook-sidebar #mdbook-search-wrapper {
+  position: relative;
+  z-index: 1;
+  max-width: none;
+  padding: 0.75rem 0.75rem 0;
+  background-color: var(--sidebar-bg);
+}
+#mdbook-sidebar #mdbook-search-wrapper.hidden {
+  /* mdBook's `.hidden` rule is itself `display: none !important;` — has to
+     be beaten with `!important` too, specificity/source order can't win
+     against it. */
+  display: block !important;
+}
+#mdbook-sidebar .searchbar-outer,
+#mdbook-sidebar .searchresults-outer {
+  max-width: none;
+}
+#mdbook-sidebar .sidebar-scrollbox {
+  top: var(--kuva-search-height, 0px);
+}
+
+#kuva-fullpage-search-slot {
+  margin-top: 1rem;
+}
+#mdbook-search-wrapper.kuva-fullpage-search {
+  position: static;
+}
+#mdbook-search-wrapper.kuva-fullpage-search.hidden {
+  /* Overrides the sidebar rule's `!important` the same way — this version
+     is never toggled away either, since the whole point of this page is
+     to search. */
+  display: block !important;
+}
+#mdbook-search-wrapper.kuva-fullpage-search .searchbar-outer,
+#mdbook-search-wrapper.kuva-fullpage-search .searchresults-outer {
+  max-width: var(--content-max-width);
+}
+#mdbook-search-wrapper.kuva-fullpage-search #mdbook-searchbar {
+  font-size: 1.1rem;
+  padding: 14px 18px;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────
+   mdBook's own `table { margin: 0 auto }` centers each table as a whole
+   block. Harmless for one table on its own, but pages that stack several
+   short tables in a row (cli/index.md's per-category subcommand tables,
+   flag-reference tables throughout the plot pages) end up with each one
+   independently centered at a different width, so nothing lines up on the
+   left. Left-align the block and its header text instead. */
+table {
+  margin: 0;
+}
+table thead th {
+  text-align: left;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+.gallery-card {
+  border: 1px solid var(--sidebar-bg, #e0e0e0);
+  border-top: 3px solid var(--kuva-accent);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.gallery-card:hover {
+  box-shadow: 0 6px 16px var(--kuva-accent-soft), 0 2px 6px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+.gallery-card a {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+.gallery-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.gallery-caption {
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.gallery-desc {
+  padding: 0 0.75rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--fg, #555);
+  opacity: 0.8;
+}

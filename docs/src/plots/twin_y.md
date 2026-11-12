@@ -176,6 +176,46 @@ let layout = Layout::auto_from_twin_y_plots(&primary, &secondary)
 | `.with_y2_label(s)` | Right (secondary) axis label |
 | `.with_y2_label_offset(dx, dy)` | Nudge the right axis label position in pixels |
 | `.with_log_y2()` | Log₁₀ scale on the secondary axis |
-| `.with_y2_range(min, max)` | Override the secondary y-axis range |
+| `.with_y2_range(min, max)` | Suggest a secondary y-axis range; still nice-rounded and capped near the secondary plots' own data (same path as the auto-computed range), so a request far outside that data can end up largely ignored |
+| `.with_y2_axis_min(v)` / `.with_y2_axis_max(v)` | Unconditionally override the secondary y-axis lower/upper bound after auto-ranging — the y2 counterparts to `with_y_axis_min`/`with_y_axis_max`. Prefer these over `with_y2_range` when the requested bound is far from the data |
 | `.with_y2_tick_format(fmt)` | Tick format for the secondary axis |
 | `.with_palette(palette)` | Auto-assign colors across all primary + secondary plots |
+
+**See also:** [Line Plot](./line.md) and [Series Plot](./series.md) for the single-axis building blocks a twin-Y plot combines.
+
+---
+
+## CLI
+
+**Input:** a tabular file with a shared X column plus one Y column for the primary (left) axis and one for the secondary (right) axis.
+
+Currently supports `line` and `scatter` as the plot type on either axis — the two plot types that take plain `(x, y)` numeric pairs, matching how `--x`/`--y`/`--y2` select columns. For anything more elaborate (multiple series per axis, `bar`/`histogram`/`box`/etc. on an axis, mixed plot types), build the two `Vec<Plot>` directly with the Rust API above and call `render_twin_y` — see the "Mixing plot types" section earlier on this page.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--x <COL>` | `0` | X-axis column, shared by both series |
+| `--y <COL>` | `1` | Primary (left-axis) Y column |
+| `--y2 <COL>` | `2` | Secondary (right-axis) Y column |
+| `--primary-type <TYPE>` | `line` | Plot type for the primary series: `line` or `scatter` |
+| `--secondary-type <TYPE>` | `line` | Plot type for the secondary series: `line` or `scatter` |
+| `--primary-color <CSS>` | `steelblue` | Primary series color |
+| `--secondary-color <CSS>` | `firebrick` | Secondary series color |
+| `--primary-legend <TEXT>` | *(column name)* | Legend label for the primary series (used when `--legend` is set) |
+| `--secondary-legend <TEXT>` | *(column name)* | Legend label for the secondary series (used when `--legend` is set) |
+| `--legend` | off | Show a legend identifying the primary and secondary series |
+
+```bash
+kuva twin-y weather.tsv --x month --y temp --y2 rain \
+    --y-label "Temperature (C)" --y2-label "Rainfall (mm)"
+
+kuva twin-y weather.tsv --x month --y temp --y2 rain \
+    --primary-color "#e69f00" --secondary-color "#0072b2" \
+    --primary-legend "Temperature" --secondary-legend "Rainfall" --legend
+
+kuva twin-y weather.tsv --x month --y temp --y2 rain \
+    --primary-type scatter --secondary-type line
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, secondary Y axis.*

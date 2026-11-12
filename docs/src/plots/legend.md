@@ -128,3 +128,5 @@ let layout = Layout::auto_from_plots(&plots)
 | `.without_box()` | Hide the background fill and border |
 
 `collect_legend_entries(&plots)` — free function in `kuva::render::render` that walks a `Vec<Plot>` and returns all `LegendEntry` items that the renderers would normally draw automatically.
+
+**See also:** [Reference: Legends](../reference/legends.md) for the full legend/positioning system this demonstrates.

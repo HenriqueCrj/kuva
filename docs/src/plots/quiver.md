@@ -99,7 +99,9 @@ Proportional heads are clamped to `[4, 14]` pixels so tiny arrows still show a v
 
 ---
 
-## CLI flags reference
+## CLI
+
+**Input:** one row per arrow with four numeric columns: tail x, tail y, u-component, v-component.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -119,4 +121,24 @@ Proportional heads are clamped to `[4, 14]` pixels so tiny arrows still show a v
 | `--tight-bounds` | off | Derive axis bounds from arrow tails only |
 | `--legend <TXT>` | — | Legend entry label |
 
-See [kuva quiver](../cli/quiver.md) for CLI usage examples.
+```bash
+# Zero config — auto-scaling picks a sensible arrow length.
+kuva quiver field.tsv \
+    --title "Velocity Field" --x-label "x" --y-label "y"
+
+# Color by magnitude with a viridis colorbar
+kuva quiver field.tsv --colormap viridis --colorbar-label "Speed"
+
+# Tighter field (longer arrows fill the plot) + tails-only axis bounds.
+kuva quiver field.tsv --auto-scale 0.95 --tight-bounds
+
+# Pick columns by name
+kuva quiver field.tsv \
+    --x-col lon --y-col lat --u-col wind_u --v-col wind_v
+```
+
+**See also:** [Contour Plot](./contour.md) for a scalar-field alternative to a vector field, [Polar Plot](./polar.md) for angle/magnitude data in Cartesian form.
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes.*

@@ -39,6 +39,13 @@ pub struct BarPlot {
     pub horizontal: bool,
     pub show_tooltips: bool,
     pub tooltip_labels: Option<Vec<String>>,
+    /// Per-bar `(lo, hi)` error whisker offsets, in the same flat order bars
+    /// were added (matching [`tooltip_labels`](Self::tooltip_labels)'s indexing).
+    pub errors: Option<Vec<(f64, f64)>>,
+    /// Error whisker stroke color. Defaults to a dark neutral when unset.
+    pub error_color: Option<String>,
+    /// Whisker cap width as a fraction of the bar's own width (default `0.2`).
+    pub error_cap_width: f64,
 }
 
 /// A single category group containing one or more bars.
@@ -77,6 +84,9 @@ impl BarPlot {
             horizontal: false,
             show_tooltips: false,
             tooltip_labels: None,
+            errors: None,
+            error_color: None,
+            error_cap_width: 0.2,
         }
     }
 
@@ -310,6 +320,64 @@ impl BarPlot {
         labels: impl IntoIterator<Item = impl Into<String>>,
     ) -> Self {
         self.tooltip_labels = Some(labels.into_iter().map(|s| s.into()).collect());
+        self
+    }
+
+    /// Set symmetric (± magnitude) error whiskers, one per bar in the same
+    /// flat order bars were added — a single value per bar for simple mode,
+    /// or one value per bar across all groups (row-major) for grouped/stacked mode.
+    ///
+    /// ```rust,no_run
+    /// # use kuva::plot::BarPlot;
+    /// let plot = BarPlot::new()
+    ///     .with_bars(vec![("A", 3.2), ("B", 4.7), ("C", 2.8)])
+    ///     .with_error(vec![0.3, 0.5, 0.2]);
+    /// ```
+    pub fn with_error(mut self, errors: impl IntoIterator<Item = impl Into<f64>>) -> Self {
+        self.errors = Some(
+            errors
+                .into_iter()
+                .map(|e| {
+                    let e = e.into();
+                    (e, e)
+                })
+                .collect(),
+        );
+        self
+    }
+
+    /// Set asymmetric `(lo, hi)` error whiskers, one pair per bar in the same
+    /// flat order bars were added.
+    ///
+    /// ```rust,no_run
+    /// # use kuva::plot::BarPlot;
+    /// let plot = BarPlot::new()
+    ///     .with_bars(vec![("A", 3.2), ("B", 4.7)])
+    ///     .with_asymmetric_error(vec![(0.2, 0.4), (0.1, 0.6)]);
+    /// ```
+    pub fn with_asymmetric_error<V>(mut self, errors: impl IntoIterator<Item = (V, V)>) -> Self
+    where
+        V: Into<f64>,
+    {
+        self.errors = Some(
+            errors
+                .into_iter()
+                .map(|(lo, hi)| (lo.into(), hi.into()))
+                .collect(),
+        );
+        self
+    }
+
+    /// Set the error whisker stroke color (default: a dark neutral contrasting
+    /// with any bar fill).
+    pub fn with_error_color<S: Into<String>>(mut self, color: S) -> Self {
+        self.error_color = Some(color.into());
+        self
+    }
+
+    /// Set the whisker cap width as a fraction of the bar's own width (default `0.2`).
+    pub fn with_error_cap_width(mut self, frac: f64) -> Self {
+        self.error_cap_width = frac;
         self
     }
 }
