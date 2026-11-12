@@ -105,7 +105,7 @@ pub fn run(args: HexbinArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -139,6 +139,26 @@ pub fn run(args: HexbinArgs) -> Result<(), String> {
     if let Some(ref z_col) = args.z {
         let zs = table.col_f64(z_col)?;
         plot = plot.with_z(zs, cli_to_z_reduce(&args.reduce));
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::HexbinPlot",
+                    "kuva::plot::ZReduce",
+                    "kuva::plot::ColorMap",
+                ],
+                "Hexbin",
+                &[crate::emit_code::emit_hexbin_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                Some(&args.log),
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Hexbin(plot)];

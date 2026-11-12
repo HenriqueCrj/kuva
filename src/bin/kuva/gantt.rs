@@ -78,7 +78,7 @@ pub fn run(args: GanttArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -176,6 +176,22 @@ pub fn run(args: GanttArgs) -> Result<(), String> {
                 (None, None) => plot = plot.with_task(label, start, end),
             }
         }
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::GanttPlot"],
+                "Gantt",
+                &[crate::emit_code::emit_gantt_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Gantt(plot)];

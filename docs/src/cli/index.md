@@ -26,6 +26,8 @@ source ~/.cargo/env
 
 Verify with `cargo --version`. You only need to do this once.
 
+kuva itself only needs Rust 1.87. The one exception is PDF output: `--features pdf`/`full` pulls in `krilla`, which requires Rust >= 1.92. If `rustup show` reports an older version and you plan to use `--features full` or `pdf`, run `rustup update` first.
+
 ### Step 2 — install kuva
 
 **From crates.io** (recommended once a release is published):
@@ -86,7 +88,12 @@ kuva scatter - < data.tsv
 
 ### Header detection
 
-If the first field of the first row fails to parse as a number, the row is treated as a header. Override with `--no-header`.
+The first row is treated as a header when either its first field fails to parse as a number, or some column holds a non-numeric label sitting atop an otherwise all-numeric column (so a leading numeric key column no longer hides the header, e.g. `5,data` above `0,1` / `1,2`).
+
+Two flags override the auto-detection (they are mutually exclusive):
+
+- `--header`: force the first row to be a header even if it looks like data (useful for all-numeric column names such as years).
+- `--no-header`: force the first row to be data even if it looks like a header.
 
 ### Column selection
 
@@ -97,6 +104,93 @@ kuva scatter data.tsv --x 0 --y 1          # by index
 kuva scatter data.tsv --x time --y value   # by name (requires header)
 ```
 
+An all-numeric column name (such as a year) works too. A bare numeric argument is read as an index first; if that index is out of range and the file has a header column literally named by that number, it selects that column instead:
+
+```bash
+kuva scatter expression.tsv --x 2023 --y 2024 --header   # columns named "2023" / "2024"
+```
+
+In-range indices are never reinterpreted, so `--x 0` always means the first column. This bare-number fallback only resolves names whose numeric value exceeds the column count (years and similar).
+
+To remove the ambiguity entirely, prefix the value:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `name:` or `col:` | Always a column name, even an all-digit one | `--x name:2024`, `--group-col col:1` |
+| `idx:` or `index:` or `#` | Always a 0-based index, never resolved to a name | `--x idx:2`, `--y #3` |
+| *(none)* | Bare token: numeric = index-first (with the fallback above), otherwise a name | `--x time`, `--y 4` |
+
+`name:` is the way to select a column whose name is a small number that would otherwise be read as an index (e.g. a column literally named `1` in a 5-column file: `--x name:1`). `idx:` forces a pure index, so an out-of-range `idx:` errors rather than falling back to a name. Prefixes work on every column argument (`--x`, `--y`, `--value-col`, `--group-col`, `--color-by`, `--axes`, …) in every subcommand.
+
+#### Ranges and globs (multi-column arguments)
+
+Multi-column arguments (`--y`, `--value-cols`, `--samples`, `--axes`) also accept **index ranges** and **name globs**, which expand to several columns at once:
+
+| Form | Selects | Example |
+|------|---------|---------|
+| `a..b` | Indices `a` up to (but not including) `b` | `--y 1..4` -> columns 1, 2, 3 |
+| `a..=b` | Indices `a` through `b` inclusive | `--y 1..=3` -> columns 1, 2, 3 |
+| `a..` | Index `a` to the last column | `--y 3..` |
+| `..b` | The first column up to `b` (exclusive) | `--y ..4` |
+| `..` | Every column | `--y ..` |
+| `pat*` / `*pat` / `*pat*` | Header names matching the glob (`*` = any run of characters) | `--y sum_*`, `--y *_A` |
+
+You can mix all forms in one comma-separated list (duplicates are removed, order preserved):
+
+```bash
+kuva line data.tsv --x date --y "y1,sum_*"      # y1 plus every sum_* column
+kuva line data.tsv --x 0 --y 3..                 # column 3 to the last
+kuva box  data.tsv --y "a*"                       # a single glob is a valid multi-column selection
+```
+
+A single glob or range on its own still routes into the plot's multi-column (grouped/overlaid) path. Globs need a header row; a glob that matches nothing is an error. Ranges are index-based. (For `--value-cols`/`--axes`, which take space-separated values rather than commas, pass each selector as its own value: `--value-cols a1 b*`.)
+
+### Missing values *(scatter, line, histogram, bar, parallel)*
+
+Empty cells, cells holding a missing-value token (`NA`, `NaN`, `null`, `N/A`, `.` by default,
+case-insensitive), and non-finite values (`inf`, `-inf`) are treated as missing rather than
+aborting the command (non-finite values would otherwise corrupt axis ranges). A cell that is
+neither empty, a token, nor a number is still an error, so selecting the wrong column is caught.
+
+- `--na-strategy <drop|zero|error>`: what to do with a missing value in a selected numeric column.
+  `drop` (default) removes the row and prints a one-line note; `zero` replaces it with 0; `error`
+  restores the old strict behaviour.
+- `--na-values <tokens>`: comma-separated tokens to treat as missing, replacing the default set.
+  Empty cells are always missing. Accepts negative sentinels, e.g. `--na-values -999,NA`.
+- `--clamp-min <N>` / `--clamp-max <N>`: clip numeric values to a bound. Finite values outside the
+  bound are clipped, and crucially `+inf` becomes the max and `-inf` becomes the min, so an infinite
+  value can be capped at a real number rather than dropped. A common case is capping an infinite
+  `-log10(p)` (from a p-value of exactly 0): `--clamp-max 300`. If only one side is set, an infinity
+  on the other side stays missing.
+
+```bash
+kuva scatter data.tsv --x time --y value                 # drops rows with missing x or y
+kuva histogram data.tsv --value-col v --na-strategy zero # missing -> 0
+kuva scatter data.tsv --x pos --y logp --clamp-max 300   # +inf -> 300 instead of dropped
+```
+
+### Parquet input
+
+Every subcommand that reads tabular data also accepts **`.parquet`** files, not just scatter or any single subcommand: parquet support lives in the shared input layer every subcommand goes through, so it applies uniformly across all of them.
+
+```bash
+kuva scatter data.parquet --x x --y y -o plot.svg
+cat data.parquet | kuva histogram --value-col value    # also detected via stdin
+```
+
+Requires building with the `parquet` feature (`cargo build --features cli,parquet`, or `cli,full,parquet` for every backend). Without it, a `.parquet` file is read as plain text and will fail to parse.
+
+Detection is automatic, no flag needed:
+
+| Input | How it's detected |
+|---|---|
+| File path | `.parquet` extension (case-insensitive) |
+| stdin | Magic bytes (`PAR1` header) sniffed from the piped data |
+
+Column selection (`--x`, `--y`, `--value-col`, etc.) works identically to CSV/TSV, by index or header name. Under the hood, only the requested columns are decoded from disk (a projected Arrow read), so memory and time scale with the columns you actually select rather than the full schema, useful for wide parquet files with many unused columns.
+
+`--header`, `--no-header`, and `--delimiter` are ignored for parquet input (with a warning) since parquet is self-describing: it always carries its own schema and column names, so there's no header row to skip and no delimiter to guess.
+
 ---
 
 ## Output
@@ -106,9 +200,9 @@ kuva scatter data.tsv --x time --y value   # by name (requires header)
 | *(omitted)* | SVG to stdout |
 | `-o out.svg` | SVG to file |
 | `-o out.png` | PNG (requires `--features png`) |
-| `-o out.pdf` | PDF (requires `--features pdf`) |
+| `-o out.pdf` | PDF (requires `--features pdf`; needs Rust >= 1.92 to build — higher than kuva's own MSRV, see [Installation](#installation)) |
 
-Format is inferred from the file extension. Any unrecognised extension is treated as SVG.
+Format is inferred from the file extension case-insensitively. Output paths must end in `.svg`, `.png`, or `.pdf`; other or missing extensions are rejected before input is read.
 
 ---
 
@@ -120,13 +214,15 @@ These flags are available on every subcommand.
 
 | Flag | Default | Description |
 |---|---|---|
-| `-o`, `--output <FILE>` | stdout (SVG) | Output file path (mutually exclusive with `--terminal`) |
+| `-o`, `--output <FILE>` | stdout (SVG) | `.svg`, `.png`, or `.pdf` output path, case-insensitive (mutually exclusive with `--terminal`) |
 | `--title <TEXT>` | — | Title displayed above the chart |
+| `--subtitle <TEXT>` | — | Secondary line under the title, smaller and muted ([Reference → Layout](../reference/layout.md)) |
 | `--width <PX>` | `800` | Canvas width in pixels |
 | `--height <PX>` | `500` | Canvas height in pixels |
 | `--theme <NAME>` | `light` | Theme: `light`, `dark`, `solarized`, `minimal` |
 | `--palette <NAME>` | `category10` | Color palette for multi-series plots |
 | `--cvd-palette <NAME>` | — | Colour-vision-deficiency palette: `deuteranopia`, `protanopia`, `tritanopia`. Overrides `--palette`. |
+| `--bw` | off | [Black & white / accessibility mode](../reference/bw_mode.md) — replaces colors with grey shades, hatch patterns, dash styles, and marker shapes so the plot stays legible in greyscale |
 | `--background <COLOR>` | *(theme default)* | SVG background color (any CSS color string) |
 
 ### Fonts
@@ -135,7 +231,7 @@ These flags are available on every subcommand.
 |---|---|---|
 | `--embed-font` | off | Embed DejaVu Sans directly in SVG output (mutually exclusive with `--terminal`) |
 
-By default, SVG output references fonts by name and relies on the viewer to resolve them. This works fine in browsers and on any system where DejaVu Sans, Liberation Sans, or Arial is installed. In environments with no system fonts — headless servers, containers, CI pipelines — text may be missing or fall back to an unexpected face.
+By default, SVG output references fonts by name and relies on the viewer to resolve them. This works fine in browsers and on any system where DejaVu Sans, Verdana, Liberation Sans, or Arial is installed. In environments with no system fonts — headless servers, containers, CI pipelines — text may be missing or fall back to an unexpected face.
 
 `--embed-font` bakes DejaVu Sans as a base64 `@font-face` block into the SVG `<style>` element, making the file fully self-contained at the cost of roughly 1 MB of extra size. PNG and PDF output is unaffected: those backends always have the font available regardless of this flag.
 
@@ -210,10 +306,56 @@ cat gwas.tsv | kuva manhattan --chr-col chr --pvalue-col pvalue --terminal
 | `--log-x` | Logarithmic X axis |
 | `--log-y` | Logarithmic Y axis |
 
+### Date/time X axis *(scatter, line)*
+
+| Flag | Default | Description |
+|---|---|---|
+| `--x-date-format <FMT>` | — | Parse the X column as a date/time using this `strftime`-style format (e.g. `%Y-%m-%d`, `%m/%d/%Y %H:%M`) instead of a plain number. Formats with no time component parse as midnight UTC. |
+| `--x-date-unit <UNIT>` | auto | Tick spacing unit: `years`, `months`, `weeks`, `days`, `hours`, or `minutes`. Omit for auto mode, which inspects the data range and picks one. Ignored unless `--x-date-format` is set. |
+| `--x-date-tick-format <FMT>` | *(per-unit default)* | Tick label format, overriding the unit's default (see table below). Ignored in auto mode. |
+| `--x-date-tick-step <N>` | `1` | Draw one tick every `N` units instead of every 1. |
+
+Default tick format per unit (used when `--x-date-tick-format` is omitted):
+
+| Unit | Default format | Example |
+|---|---|---|
+| `years` | `%Y` | `2024` |
+| `months` | `%b %Y` | `Jan 2024` |
+| `weeks` | `%b %d` | `Jan 15` |
+| `days` | `%Y-%m-%d` | `2024-01-15` |
+| `hours` | `%H:%M` | `14:30` |
+| `minutes` | `%H:%M` | `14:30` |
+
+```bash
+# Auto mode: format and unit picked from the data range
+kuva line prices.tsv --x date --y close --x-date-format "%Y-%m-%d"
+
+# Explicit unit and tick format
+kuva scatter prices.tsv --x date --y close \
+    --x-date-format "%Y-%m-%d" --x-date-unit months --x-date-tick-format "%b %y"
+
+# One tick every 2 weeks
+kuva line prices.tsv --x date --y close \
+    --x-date-format "%Y-%m-%d" --x-date-unit weeks --x-date-tick-step 2
+```
+
+See [Reference → Date & Time Axes](../reference/datetime.md) for the underlying `DateTimeAxis` API.
+
+### Secondary Y axis *(twin-y)*
+
+| Flag | Description |
+|---|---|
+| `--y2-label <TEXT>` | Label for the secondary (right) Y axis |
+| `--y2-min <F>` | Fix the secondary Y axis lower bound; overrides auto-range |
+| `--y2-max <F>` | Fix the secondary Y axis upper bound; overrides auto-range |
+| `--log-y2` | Log-scale the secondary Y axis |
+| `--y2-tick-format <FORMAT>` | Tick label format for the secondary Y axis: auto (default), int, sci, percent, or fixed:N |
+
 ### Input
 
 | Flag | Description |
 |---|---|
+| `--header` | Force first row as a header (overrides auto-detection) |
 | `--no-header` | Treat first row as data, not a header |
 | `-d`, `--delimiter <CHAR>` | Override field delimiter |
 
@@ -221,106 +363,109 @@ cat gwas.tsv | kuva manhattan --chr-col chr --pvalue-col pvalue --terminal
 
 ## Subcommands
 
+All 57 subcommands, grouped the same way plot pages are grouped in the sidebar. Each link goes straight to that subcommand's **CLI** section at the bottom of its library-equivalent page, right next to the Rust API it wraps — so full per-flag documentation, usage examples, and the builder reference live together on one page instead of two.
+
+### Distributions
+
 | Subcommand | Description |
 |---|---|
-| [scatter](./scatter.md) | Scatter plot of (x, y) point pairs |
-| [line](./line.md) | Line plot |
-| [bar](./bar.md) | Bar chart from label/value pairs |
-| [histogram](./histogram.md) | Frequency histogram from a single numeric column |
-| [density](./density.md) | Kernel density estimate curve |
-| [ridgeline](./ridgeline.md) | Stacked KDE density curves, one per group |
-| [box](./box.md) | Box-and-whisker plot |
-| [violin](./violin.md) | Kernel-density violin plot |
-| [pie](./pie.md) | Pie or donut chart |
-| [forest](./forest.md) | Forest plot — point estimates with confidence intervals |
-| [strip](./strip.md) | Strip / jitter plot |
-| [waterfall](./waterfall.md) | Waterfall / bridge chart |
-| [stacked-area](./stacked_area.md) | Stacked area chart |
-| [volcano](./volcano.md) | Volcano plot for differential expression |
-| [manhattan](./manhattan.md) | Manhattan plot for GWAS results |
-| [candlestick](./candlestick.md) | OHLC candlestick chart |
-| [heatmap](./heatmap.md) | Color-encoded matrix heatmap |
-| [hist2d](./hist2d.md) | Two-dimensional histogram |
-| [contour](./contour.md) | Contour plot from scattered (x, y, z) triplets |
-| [dot](./dot.md) | Dot plot (size + color at categorical positions) |
-| [upset](./upset.md) | UpSet plot for set-intersection analysis |
-| [chord](./chord.md) | Chord diagram for pairwise flow data |
-| [network](./network.md) | Network / graph diagram from edge list or matrix |
-| [sankey](./sankey.md) | Sankey / alluvial flow diagram |
-| [phylo](./phylo.md) | Phylogenetic tree |
-| [synteny](./synteny.md) | Synteny / genomic alignment ribbon plot |
-| [polar](./polar.md) | Polar coordinate scatter/line plot |
-| [ternary](./ternary.md) | Ternary (simplex) scatter plot |
-| [scatter3d](./scatter3d.md) | 3D scatter plot with orthographic projection |
-| [surface3d](./surface3d.md) | 3D surface mesh with depth-sorted rendering |
-| [quiver](./quiver.md) | 2-D vector field rendered as arrows |
+| [histogram](../plots/histogram.md#cli) | Frequency histogram from one or more numeric columns |
+| [hist2d](../plots/histogram2d.md#cli) | Two-dimensional histogram (density grid) from two numeric columns |
+| [density](../plots/density.md#cli) | Kernel density estimate curve |
+| [ridgeline](../plots/ridgeline.md#cli) | Stacked KDE density curves, one per group |
+| [ecdf](../plots/ecdf.md#cli) | Empirical cumulative distribution function |
+| [qq](../plots/qq.md#cli) | Q-Q (quantile-quantile) plot |
+| [box](../plots/boxplot.md#cli) | Box-and-whisker plot |
+| [violin](../plots/violin.md#cli) | Kernel-density violin plot |
+| [strip](../plots/strip.md#cli) | Strip / jitter plot |
+| [raincloud](../plots/raincloud.md#cli) | Half-violin KDE cloud, box, and jittered points combined |
+| [hexbin](../plots/hexbin.md#cli) | Hexagonal-bin density plot from two numeric columns |
+| [heatmap](../plots/heatmap.md#cli) | Color-encoded matrix heatmap |
 
----
+### Relationships & correlation
 
-## scatter3d
+| Subcommand | Description |
+|---|---|
+| [scatter](../plots/scatter.md#cli) | Scatter plot of (x, y) point pairs |
+| [line](../plots/line.md#cli) | Line plot |
+| [contour](../plots/contour.md#cli) | Contour plot from scattered (x, y, z) triplets |
+| [parallel](../plots/parallel.md#cli) | Parallel coordinates, one axis per variable |
+| [polar](../plots/polar.md#cli) | Polar coordinate scatter/line plot |
+| [ternary](../plots/ternary.md#cli) | Ternary (simplex) scatter plot |
+| [quiver](../plots/quiver.md#cli) | 2-D vector field rendered as arrows |
 
-3D scatter plot with orthographic projection and depth-sorted rendering.
+### Categorical & comparison
 
-**Input:** TSV/CSV with three numeric columns for X, Y, Z coordinates, plus an optional group column.
+| Subcommand | Description |
+|---|---|
+| [bar](../plots/bar.md#cli) | Bar chart from label/value pairs |
+| [pie](../plots/pie.md#cli) | Pie or donut chart |
+| [waffle](../plots/waffle.md#cli) | Proportional grid of filled cells |
+| [funnel](../plots/funnel.md#cli) | Stage-by-stage attrition funnel |
+| [pareto](../plots/pareto.md#cli) | Bars sorted descending, plus a cumulative-percentage line |
+| [pyramid](../plots/pyramid.md#cli) | Population pyramid (back-to-back horizontal bars) |
+| [lollipop](../plots/lollipop.md#cli) | Dot-and-stem alternative to bar charts |
+| [slope](../plots/slope.md#cli) | Paired before/after comparisons |
+| [dot](../plots/dotplot.md#cli) | Dot plot (size + color at categorical positions) |
+| [mosaic](../plots/mosaic.md#cli) | Mosaic / Marimekko two-way contingency table |
+| [venn](../plots/venn.md#cli) | Venn diagram, 2 to 4 overlapping sets |
+| [upset](../plots/upset.md#cli) | UpSet plot for set-intersection analysis |
+| [radar](../plots/radar.md#cli) | Radar / spider chart |
+| [rose](../plots/rose.md#cli) | Nightingale rose (coxcomb) chart |
 
-| Flag | Default | Description |
-|---|---|---|
-| `--x <COL>` | `0` | X coordinate column |
-| `--y <COL>` | `1` | Y coordinate column |
-| `--z <COL>` | `2` | Z coordinate column |
-| `--color-by <COL>` | — | Group by column for per-group colors |
-| `--color <CSS>` | `steelblue` | Point color |
-| `--size <PX>` | `3.0` | Point radius in pixels |
-| `--azimuth <DEG>` | `-60` | Azimuth viewing angle |
-| `--elevation <DEG>` | `30` | Elevation viewing angle |
-| `--z-color <MAP>` | — | Color by Z: viridis, inferno, grayscale |
-| `--depth-shade` | off | Fade distant points for depth cue |
-| `--z-axis-left` | off | Place Z-axis on the left side |
-| `--no-grid` | off | Hide grid lines on back walls |
-| `--no-box` | off | Hide wireframe bounding box |
-| `--grid-lines <N>` | `5` | Grid/tick divisions per axis |
+### Time series
 
-```bash
-kuva scatter3d data.tsv --x x --y y --z z \
-    --title "3D Scatter" --x-label "X" --y-label "Y" --z-label "Z"
+| Subcommand | Description |
+|---|---|
+| [stacked-area](../plots/stacked_area.md#cli) | Stacked area chart |
+| [streamgraph](../plots/streamgraph.md#cli) | Flowing stacked area with a displaced baseline |
+| [candlestick](../plots/candlestick.md#cli) | OHLC candlestick chart |
+| [waterfall](../plots/waterfall.md#cli) | Running total built from incremental bars |
+| [horizon](../plots/horizon.md#cli) | Folded stacked time series for many series in limited height |
+| [calendar](../plots/calendar.md#cli) | GitHub-style daily contribution grid |
+| [gantt](../plots/gantt.md#cli) | Task bars with milestones and a "now" line |
+| [bump](../plots/bump.md#cli) | Rank changes over time |
 
-kuva scatter3d data.tsv --x x --y y --z z --color-by group \
-    --z-color viridis --depth-shade
-```
+### Statistical & model evaluation
 
----
+| Subcommand | Description |
+|---|---|
+| [roc](../plots/roc.md#cli) | ROC curve for binary classifiers |
+| [pr](../plots/pr.md#cli) | Precision-recall curve |
+| [survival](../plots/survival.md#cli) | Kaplan-Meier survival curve |
+| [forest](../plots/forest.md#cli) | Point estimates with confidence intervals |
 
-## surface3d
+### Hierarchical & network
 
-3D surface mesh with depth-sorted filled quadrilaterals.
+| Subcommand | Description |
+|---|---|
+| [treemap](../plots/treemap.md#cli) | Tile a rectangle proportionally to values |
+| [sunburst](../plots/sunburst.md#cli) | Radial hierarchy chart |
+| [network](../plots/network.md#cli) | Graph diagram from an edge list or adjacency matrix |
+| [sankey](../plots/sankey.md#cli) | Sankey / alluvial flow diagram |
+| [chord](../plots/chord.md#cli) | Chord diagram for pairwise flow data |
+| [phylo](../plots/phylo.md#cli) | Phylogenetic tree from a Newick string or edge-list |
 
-**Input:** Either XYZ columns (long format, auto-pivoted to grid) or `--matrix` mode where each row is a grid row of Z values.
+### Genomics & bioinformatics
 
-| Flag | Default | Description |
-|---|---|---|
-| `--x <COL>` | `0` | X coordinate column (long format) |
-| `--y <COL>` | `1` | Y coordinate column (long format) |
-| `--z <COL>` | `2` | Z coordinate column (long format) |
-| `--matrix` | off | Read as Z-value matrix (one row per grid row) |
-| `--z-color <MAP>` | — | Color by Z: viridis, inferno, grayscale |
-| `--color <CSS>` | `steelblue` | Uniform surface color (when no colormap) |
-| `--alpha <F>` | `1.0` | Surface opacity (0.0–1.0) |
-| `--no-wireframe` | off | Disable wireframe edges on mesh |
-| `--resolution <N>` | — | Upsample grid to NxN via bilinear interpolation (max 1000) |
-| `--azimuth <DEG>` | `-60` | Azimuth viewing angle |
-| `--elevation <DEG>` | `30` | Elevation viewing angle |
-| `--z-axis-left` | off | Place Z-axis on the left side |
-| `--no-grid` | off | Hide grid lines on back walls |
-| `--no-box` | off | Hide wireframe bounding box |
-| `--grid-lines <N>` | `5` | Grid/tick divisions per axis |
+| Subcommand | Description |
+|---|---|
+| [manhattan](../plots/manhattan.md#cli) | Manhattan plot for GWAS results |
+| [volcano](../plots/volcano.md#cli) | Volcano plot for differential expression |
+| [synteny](../plots/synteny.md#cli) | Genomic alignment ribbon plot |
 
-```bash
-kuva surface3d data.tsv --x x --y y --z z --z-color viridis \
-    --title "3D Surface"
+### 3D
 
-kuva surface3d matrix.tsv --matrix --z-color inferno \
-    --resolution 50 --alpha 0.9
-```
+| Subcommand | Description |
+|---|---|
+| [scatter3d](../plots/scatter3d.md#cli) | 3D scatter plot with orthographic projection |
+| [surface3d](../plots/surface3d.md#cli) | 3D surface mesh with depth-sorted rendering |
+
+### Composite & Utility
+
+| Subcommand | Description |
+|---|---|
+| [twin-y](../plots/twin_y.md#cli) | Two series sharing an x-axis with independent primary/secondary y-scales |
 
 ---
 

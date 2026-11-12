@@ -167,3 +167,37 @@ let plots = vec![Plot::Lollipop(plot)];
 | `.with_domain_opacity(x0, x1, label, color, opacity)` | — | Domain rect with explicit opacity |
 | `.with_domain_height(h)` | `0.5` | Domain rect height in data units below the baseline |
 | `.with_legend(label)` | — | Attach a legend (colored circle entry) |
+
+**See also:** [Bar Chart](./bar.md) for the classic filled version, [Slope Chart](./slope.md) for before/after comparisons, [Pareto Chart](./pareto.md) for ranked bars with a cumulative line.
+
+---
+
+## CLI
+
+Lollipop chart — dot-and-stem alternative to bar charts, useful for emphasising individual values.
+
+**Input:** one row per data point with x (numeric or categorical) and y value columns.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--x-col <COL>` | `0` | X-value column (numeric or string; strings become categorical) |
+| `--y-col <COL>` | `1` | Y-value column |
+| `--label-col <COL>` | — | Optional label column (shown at each dot) |
+| `--color <CSS>` | `steelblue` | Stem and dot color |
+| `--baseline <F>` | `0.0` | Value at which stems originate |
+| `--stem-width <PX>` | `1.5` | Stem stroke width |
+| `--dot-radius <PX>` | `5.0` | Dot radius |
+| `--no-baseline-line` | off | Hide the horizontal baseline rule |
+| `--legend <LABEL>` | — | Add a legend entry |
+
+```bash
+kuva lollipop data.tsv --x-col gene --y-col expression
+
+kuva lollipop data.tsv --x-col gene --y-col log2fc \
+    --baseline 0 --color "#e15759" \
+    --label-col gene --title "Differentially Expressed Genes"
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes.*

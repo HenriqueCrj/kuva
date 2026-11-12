@@ -114,6 +114,23 @@ let strip = StripPlot::new()
 
 ---
 
+## Horizontal orientation
+
+`.with_horizontal(true)` flips the axes: categories run down the Y axis and values along the X axis (seaborn `orient='h'`, ggplot2 `coord_flip`). Jitter and swarm spread run vertically within each row. This reads better when group labels are long, or to line the plot up with a horizontal box or violin.
+
+```rust,no_run
+# use kuva::plot::StripPlot;
+let strip = StripPlot::new()
+    .with_group("Control",   control_data)
+    .with_group("Treatment", treatment_data)
+    .with_swarm()
+    .with_horizontal(true);
+```
+
+<img src="../assets/strip/horizontal.svg" alt="Horizontal strip plot" width="560">
+
+---
+
 ## Composing with a box plot
 
 A `StripPlot` can be layered on top of a `BoxPlot` by passing both to `render_multiple`. Use a semi-transparent `rgba` color for the strip so the box summary remains legible underneath.
@@ -329,7 +346,60 @@ The stroke color always matches the fill color set by `.with_color()` or `.with_
 | `.with_jitter(j)` | Jittered strip layout; `j` is half-width as fraction of slot (default `0.3`) |
 | `.with_swarm()` | Beeswarm layout — non-overlapping, best for N < 200 |
 | `.with_center()` | All points at group center — vertical density column |
+| `.with_horizontal(bool)` | Flip axes: categories on Y, values on X (coord_flip) |
 | `.with_seed(n)` | RNG seed for jitter positions (default `42`) |
 | `.with_legend(s)` | Attach a legend label |
 | `.with_marker_opacity(f)` | Fill alpha: `0.0` = hollow, `1.0` = solid (default: solid) |
 | `.with_marker_stroke_width(w)` | Outline stroke at the fill color; `None` = no stroke (default) |
+
+**See also:** [Box Plot](./boxplot.md) for a summary overlay, [Violin Plot](./violin.md) for the full density shape, [Raincloud Plot](./raincloud.md) for all three combined.
+
+---
+
+## CLI
+
+Strip / jitter plot — individual points along a categorical axis.
+
+**Input:** group label column + numeric value column, one observation per row.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--group-col <COL>` | `0` | Group label column |
+| `--value-col <COL>` | `1` | Numeric value column |
+| `--y <COL>[,<COL>…]` | — | Comma-separated columns; each column becomes a separate group (column name = group label). Overrides `--group-col` + `--value-col` when 2+ columns given |
+| `--color <CSS>` | `steelblue` | Point color |
+| `--point-size <PX>` | `4.0` | Point radius in pixels |
+| `--swarm` | off | Beeswarm (non-overlapping) layout |
+| `--center` | off | All points at group center (no spread) |
+| `--horizontal` | off | Flip axes: categories on Y, values on X |
+| `--opacity <0..1>` | opaque | Marker fill opacity; below 1 reveals density where points overlap (use for large N) |
+| `--legend` | off | Color groups by palette and show a legend |
+
+Default layout when neither `--swarm` nor `--center` is given: random jitter (±30 % of slot width).
+
+`--legend` assigns a distinct palette color to each group and adds a legend. Combine with `--interactive` to enable legend toggle (click a legend entry to show/hide that group).
+
+```bash
+kuva strip samples.tsv --group-col group --value-col expression
+
+kuva strip samples.tsv --group-col group --value-col expression --swarm
+
+# large N: semi-transparent markers reveal density through overlap
+kuva strip samples.tsv --group-col group --value-col expression \
+    --swarm --point-size 2.5 --opacity 0.35
+
+# multi-column: each numeric column is a group
+kuva strip data.tsv --y col_a,col_b,col_c
+
+# colored groups with legend
+kuva strip samples.tsv --group-col group --value-col expression \
+    --legend -o strip_legend.svg
+
+# interactive: hover, search, legend toggle
+kuva strip samples.tsv --group-col group --value-col expression \
+    --legend --interactive -o strip_interactive.svg
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, log scale.*

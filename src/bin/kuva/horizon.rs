@@ -63,7 +63,7 @@ pub fn run(args: HorizonArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -100,6 +100,22 @@ pub fn run(args: HorizonArgs) -> Result<(), String> {
         let x_vals = table.col_f64(&x_col)?;
         let y_vals = table.col_f64(&value_col)?;
         plot = plot.with_series("", x_vals, y_vals);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::HorizonPlot"],
+                "Horizon",
+                &[crate::emit_code::emit_horizon_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Horizon(plot)];

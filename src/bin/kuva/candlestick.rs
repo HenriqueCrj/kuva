@@ -82,7 +82,7 @@ pub fn run(args: CandlestickArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -198,6 +198,22 @@ pub fn run(args: CandlestickArgs) -> Result<(), String> {
 
     if args.volume_panel {
         plot = plot.with_volume_panel();
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::CandlestickPlot"],
+                "Candlestick",
+                &[crate::emit_code::emit_candlestick_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Candlestick(plot)];

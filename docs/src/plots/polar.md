@@ -212,6 +212,10 @@ kuva polar data.tsv --r r --theta theta --color-by group --mode line
 
 # Custom r-max and angular divisions
 kuva polar data.tsv --r r --theta theta --r-max 5.0 --theta-divisions 8
+
+# dB-scale antenna pattern: r values range from -20 to 0 dBi
+kuva polar pattern.tsv --r gain_dbi --theta angle --mode line \
+    --r-min -20 --r-max 0 --title "Antenna Pattern (dBi)"
 ```
 
 ### CLI flags
@@ -223,6 +227,13 @@ kuva polar data.tsv --r r --theta theta --r-max 5.0 --theta-divisions 8
 | `--color-by <COL>` | — | One series per unique group value |
 | `--mode <MODE>` | `scatter` | `scatter` or `line` |
 | `--r-max <F>` | auto | Maximum radial extent |
+| `--r-min <F>` | `0` | Value mapped to the plot centre; use a negative value for dB-scale data |
 | `--theta-divisions <N>` | `12` | Angular grid spokes |
 | `--theta-start <DEG>` | `0.0` | Where θ=0 appears (CW from north) |
 | `--legend` | off | Show legend |
+
+**See also:** [Ternary Plot](./ternary.md) for a different non-Cartesian coordinate system, [Nightingale Rose](./rose.md) for a polar bar-chart variant, [Radar / Spider Chart](./radar.md) for categorical polar comparison.
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes.*

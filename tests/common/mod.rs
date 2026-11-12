@@ -18,3 +18,20 @@ pub fn write_test_output(
     let _ = std::fs::create_dir("test_outputs");
     std::fs::write(path, content)
 }
+
+/// The `y` attribute of the `<text>` element whose content is exactly `content`.
+///
+/// Panics if no such element exists. Shared by SVG tests that assert text baselines.
+/// `allow(dead_code)`: `common` is included via `mod common;` into every test binary,
+/// but only some of them use this helper.
+#[allow(dead_code)]
+pub fn text_y(svg: &str, content: &str) -> f64 {
+    let needle = format!(">{content}</text>");
+    let end = svg
+        .find(&needle)
+        .unwrap_or_else(|| panic!("no text {content:?} in SVG"));
+    let seg = &svg[..end];
+    let y_start = seg.rfind(r#" y=""#).unwrap() + 4;
+    let y_end = seg[y_start..].find('"').unwrap() + y_start;
+    seg[y_start..y_end].parse().unwrap()
+}

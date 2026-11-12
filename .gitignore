@@ -42,3 +42,6 @@ TODO*.md
 
 # Benchmarks — data and results are local only
 /benches/
+
+# Generated at test time by tests/emit_code_compiles.rs (trybuild fixtures)
+/tests/emit_code_fixtures/

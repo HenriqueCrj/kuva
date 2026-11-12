@@ -188,3 +188,9 @@ kuva surface3d data.tsv --x x --y y --z z \
 | `--no-box` | box on | Hide wireframe bounding box |
 | `--grid-lines <N>` | `5` | Grid/tick divisions per axis |
 | `--z-axis-left` | auto | Force Z axis to the left side |
+
+**See also:** [3D Scatter Plot](./scatter3d.md) for discrete points instead of a continuous surface, [Contour Plot](./contour.md) for a 2D projection of similar gridded data, [Heatmap](./heatmap.md) for a flat matrix-of-values view.
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes.*

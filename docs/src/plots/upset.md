@@ -50,6 +50,8 @@ Intersections are sorted by frequency (default) so the largest bars are leftmost
 
 The third argument is an iterator of `(mask, count)` pairs. The **mask** is a bitmask: **bit `i` is set when `set_names[i]` participates in that intersection**.
 
+A mask is a `u64`, so an UpSet plot holds **at most 64 sets** (`UpSetPlot::MAX_SETS`). Sets past the 64th have no bit of their own, so `.with_sets()` and `.with_data()` drop them rather than folding them onto an existing set; `kuva upset` rejects input with more than 64 columns instead, since it can report the problem.
+
 ```rust,no_run
 # use kuva::plot::UpSetPlot;
 # use kuva::render::plots::Plot;
@@ -161,3 +163,36 @@ Non-participating dots are always shown in light gray (`#dddddd`) for contrast.
 ## Terminal output
 
 UpSet plots are not yet supported in terminal mode. Running `kuva upset --terminal` prints a message to stderr and exits cleanly; use `-o file.svg` to generate an SVG instead.
+
+**See also:** [Venn Diagram](./venn.md) for a small number of sets, [Mosaic Plot](./mosaic.md) for two-way categorical proportions.
+
+---
+
+## CLI
+
+UpSet plot for set-intersection analysis.
+
+**Input:** binary (0/1) matrix — one column per set, one row per element. Column headers become set names. At most 64 columns: more than that is rejected, because an intersection is a 64-bit mask.
+
+```
+GWAS_hit  eQTL  Splicing_QTL  Methylation_QTL  Conservation  ClinVar
+1         0     0             1                1             1
+0         0     1             1                1             0
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--sort <MODE>` | `frequency` | Sort intersections: `frequency`, `degree`, `natural`. Ties and `natural` are ordered by set membership, the same order as `UpSetPlot::with_sets`. |
+| `--max-visible <N>` | — | Show only the top N intersections |
+
+```bash
+kuva upset upset.tsv
+
+kuva upset upset.tsv --sort degree --max-visible 15
+```
+
+> **Terminal output:** not yet supported. `kuva upset --terminal` prints a message and exits cleanly; use `-o file.svg` instead.
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, log scale.*

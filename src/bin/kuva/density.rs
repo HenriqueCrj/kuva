@@ -55,7 +55,7 @@ pub struct DensityArgs {
 
 pub fn run(args: DensityArgs) -> Result<(), String> {
     // Multi-column --y mode: one density curve per column
-    if args.y.len() > 1 {
+    if args.y.len() > 1 || args.y.iter().any(|c| c.is_multi()) {
         if args.color_by.is_some() {
             return Err(
                 "--y with multiple columns is mutually exclusive with --color-by".to_string(),
@@ -63,13 +63,14 @@ pub fn run(args: DensityArgs) -> Result<(), String> {
         }
         let table = DataTable::parse(
             args.input.input.as_deref(),
-            args.input.no_header,
+            args.input.header_mode(),
             args.input.delimiter,
             &args.y,
         )?;
+        // Expand column ranges / globs against the parsed table (issue #109).
+        let cols = table.expand_columns(&args.y)?;
         let pal = Palette::category10();
-        let plots: Vec<Plot> = args
-            .y
+        let plots: Vec<Plot> = cols
             .iter()
             .enumerate()
             .map(|(i, col)| {
@@ -97,6 +98,30 @@ pub fn run(args: DensityArgs) -> Result<(), String> {
                 Ok(Plot::Density(dp))
             })
             .collect::<Result<Vec<_>, String>>()?;
+
+        #[cfg(feature = "emit_code")]
+        if args.base.emit_code {
+            let exprs: Vec<String> = plots
+                .iter()
+                .filter_map(|pl| match pl {
+                    Plot::Density(d) => Some(crate::emit_code::emit_density_plot(d)),
+                    _ => None,
+                })
+                .collect();
+            print!(
+                "{}",
+                crate::emit_code::assemble(
+                    &["kuva::plot::DensityPlot"],
+                    "Density",
+                    &exprs,
+                    &args.base,
+                    Some(&args.axis),
+                    Some(&args.log),
+                )
+            );
+            return Ok(());
+        }
+
         let layout = Layout::auto_from_plots(&plots);
         let layout = apply_base_args(layout, &args.base);
         let layout = apply_axis_args(layout, &args.axis);
@@ -115,7 +140,7 @@ pub fn run(args: DensityArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -172,6 +197,29 @@ pub fn run(args: DensityArgs) -> Result<(), String> {
         }
         vec![Plot::Density(dp)]
     };
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        let exprs: Vec<String> = plots
+            .iter()
+            .filter_map(|pl| match pl {
+                Plot::Density(d) => Some(crate::emit_code::emit_density_plot(d)),
+                _ => None,
+            })
+            .collect();
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::DensityPlot"],
+                "Density",
+                &exprs,
+                &args.base,
+                Some(&args.axis),
+                Some(&args.log),
+            )
+        );
+        return Ok(());
+    }
 
     let layout = Layout::auto_from_plots(&plots);
     let layout = apply_base_args(layout, &args.base);

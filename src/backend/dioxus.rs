@@ -1335,7 +1335,7 @@ mod tests {
     fn fmt_float_strips_whole_numbers_and_rounds_to_two_dp() {
         assert_eq!(fmt_float(3.0), "3");
         assert_eq!(fmt_float(-0.0), "0");
-        assert_eq!(fmt_float(3.14159), "3.14"); // rounded to 2dp
+        assert_eq!(fmt_float(1.23456), "1.23"); // rounded to 2dp
         assert_eq!(fmt_float(1.5), "1.5");
         assert_eq!(fmt_float(10.0), "10");
     }
@@ -1663,6 +1663,7 @@ mod tests {
             italic: false,
             underline: false,
             code: false,
+            math: false,
         };
         let italic_under = TextSpan {
             text: "iu".to_string(),
@@ -1670,6 +1671,7 @@ mod tests {
             italic: true,
             underline: true,
             code: false,
+            math: false,
         };
         let code = TextSpan {
             text: "c".to_string(),
@@ -1677,6 +1679,7 @@ mod tests {
             italic: false,
             underline: false,
             code: true,
+            math: false,
         };
         let svg = svg_of(Primitive::RichText {
             x: 3.0,

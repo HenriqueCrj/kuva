@@ -154,6 +154,8 @@ let sg = StreamgraphPlot::new()
 | `.with_legend(title)` | — | Enable legend box; `""` for no title |
 | `.with_legend_position(pos)` | `OutsideRightTop` | Legend placement |
 
+**See also:** [Stacked Area Plot](./stacked_area.md) for the zero-baselined version, [Horizon Chart](./horizon.md) for many series in less vertical space.
+
 ---
 
 ## CLI

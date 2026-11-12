@@ -74,7 +74,7 @@ pub fn run(args: StreamgraphArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -143,10 +143,6 @@ pub fn run(args: StreamgraphArgs) -> Result<(), String> {
     // Auto-set axis labels
     let x_label = args.axis.x_label.as_deref().unwrap_or("").to_string();
     let y_label = args.axis.y_label.as_deref().unwrap_or("").to_string();
-
-    let plots = vec![Plot::Streamgraph(plot)];
-    let layout = Layout::auto_from_plots(&plots);
-    let layout = apply_base_args(layout, &args.base);
     let mut axis_args = args.axis;
     if x_label.is_empty() {
         axis_args.x_label = None;
@@ -154,6 +150,30 @@ pub fn run(args: StreamgraphArgs) -> Result<(), String> {
     if y_label.is_empty() {
         axis_args.y_label = None;
     }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::StreamgraphPlot",
+                    "kuva::plot::StreamBaseline",
+                    "kuva::plot::StreamOrder",
+                ],
+                "Streamgraph",
+                &[crate::emit_code::emit_streamgraph_plot(&plot)],
+                &args.base,
+                Some(&axis_args),
+                None,
+            )
+        );
+        return Ok(());
+    }
+
+    let plots = vec![Plot::Streamgraph(plot)];
+    let layout = Layout::auto_from_plots(&plots);
+    let layout = apply_base_args(layout, &args.base);
     let layout = apply_axis_args(layout, &axis_args);
     let scene = render_multiple(plots, layout);
     write_output(scene, &args.base)

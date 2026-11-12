@@ -281,3 +281,5 @@ Use the `Figure + PhyloTree + Heatmap` approach when:
 | `None` | No normalization (default) |
 | `RowZScore` | Each row normalized to mean 0, std 1 |
 | `ColZScore` | Each column normalized to mean 0, std 1 |
+
+**See also:** [Heatmap](./heatmap.md) for the un-clustered matrix, [Phylogenetic Tree](./phylo.md) for an explicit evolutionary tree instead of similarity clustering, [Dot Plot](./dotplot.md) for a size/color-encoded alternative.

@@ -54,7 +54,7 @@ pub struct RidgelineArgs {
 
 pub fn run(args: RidgelineArgs) -> Result<(), String> {
     // Multi-column --y mode: one ridge per column
-    if args.y.len() > 1 {
+    if args.y.len() > 1 || args.y.iter().any(|c| c.is_multi()) {
         if args.group_by.is_some() {
             return Err(
                 "--y with multiple columns is mutually exclusive with --group-by".to_string(),
@@ -62,10 +62,12 @@ pub fn run(args: RidgelineArgs) -> Result<(), String> {
         }
         let table = DataTable::parse(
             args.input.input.as_deref(),
-            args.input.no_header,
+            args.input.header_mode(),
             args.input.delimiter,
             &args.y,
         )?;
+        // Expand column ranges / globs against the parsed table (issue #109).
+        let cols = table.expand_columns(&args.y)?;
         let mut plot = RidgelinePlot::new()
             .with_filled(args.filled)
             .with_opacity(args.opacity)
@@ -73,11 +75,28 @@ pub fn run(args: RidgelineArgs) -> Result<(), String> {
         if let Some(bw) = args.bandwidth {
             plot = plot.with_bandwidth(bw);
         }
-        for col in &args.y {
+        for col in &cols {
             let name = table.col_display_name(col);
             let vals = table.col_f64(col)?;
             plot = plot.with_group(name, vals);
         }
+
+        #[cfg(feature = "emit_code")]
+        if args.base.emit_code {
+            print!(
+                "{}",
+                crate::emit_code::assemble(
+                    &["kuva::plot::RidgelinePlot"],
+                    "Ridgeline",
+                    &[crate::emit_code::emit_ridgeline_plot(&plot)],
+                    &args.base,
+                    Some(&args.axis),
+                    None,
+                )
+            );
+            return Ok(());
+        }
+
         let plots = vec![Plot::Ridgeline(plot)];
         let layout = Layout::auto_from_plots(&plots);
         let layout = apply_base_args(layout, &args.base);
@@ -97,7 +116,7 @@ pub fn run(args: RidgelineArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -120,6 +139,22 @@ pub fn run(args: RidgelineArgs) -> Result<(), String> {
     } else {
         let vals = table.col_f64(&value_col)?;
         plot = plot.with_group("data", vals);
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::RidgelinePlot"],
+                "Ridgeline",
+                &[crate::emit_code::emit_ridgeline_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Ridgeline(plot)];

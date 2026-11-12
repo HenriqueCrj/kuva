@@ -152,6 +152,29 @@ impl DateTimeAxis {
             .unwrap_or_default();
         dt.format(&self.format).to_string()
     }
+
+    /// The tick one calendar step after `ts` — calendar-correct (e.g. a
+    /// month step lands on the 1st of the next month, not 30/31 days later).
+    /// Used to extend a real tick list with the tick that would exist just
+    /// past the last major, when the axis range doesn't end on one.
+    pub(crate) fn tick_after(&self, ts: f64) -> f64 {
+        let dt = DateTime::from_timestamp(ts as i64, 0)
+            .map(|dt: DateTime<Utc>| dt.naive_utc())
+            .unwrap_or_default();
+        advance(&dt, &self.unit, self.step.max(1))
+            .and_utc()
+            .timestamp() as f64
+    }
+
+    /// The tick one calendar step before `ts` — see [`Self::tick_after`].
+    pub(crate) fn tick_before(&self, ts: f64) -> f64 {
+        let dt = DateTime::from_timestamp(ts as i64, 0)
+            .map(|dt: DateTime<Utc>| dt.naive_utc())
+            .unwrap_or_default();
+        retreat(&dt, &self.unit, self.step.max(1))
+            .and_utc()
+            .timestamp() as f64
+    }
 }
 
 /// Snap a datetime to the first calendar boundary >= dt for the given unit.
@@ -265,6 +288,20 @@ fn advance(dt: &NaiveDateTime, unit: &DateUnit, step: usize) -> NaiveDateTime {
     }
 }
 
+/// Retreat a datetime by step units — the inverse of [`advance`].
+fn retreat(dt: &NaiveDateTime, unit: &DateUnit, step: usize) -> NaiveDateTime {
+    let step = step as i64;
+    match unit {
+        DateUnit::Second => *dt - TimeDelta::seconds(step),
+        DateUnit::Minute => *dt - TimeDelta::minutes(step),
+        DateUnit::Hour => *dt - TimeDelta::hours(step),
+        DateUnit::Day => *dt - TimeDelta::days(step),
+        DateUnit::Week => *dt - TimeDelta::weeks(step),
+        DateUnit::Month => *dt - Months::new(step as u32),
+        DateUnit::Year => *dt - Months::new(step as u32 * 12),
+    }
+}
+
 /// Unix timestamp (seconds) from year/month/day UTC.
 pub fn ymd(year: i32, month: u32, day: u32) -> f64 {
     NaiveDate::from_ymd_opt(year, month, day)
@@ -283,4 +320,58 @@ pub fn ymd_hms(year: i32, month: u32, day: u32, h: u32, m: u32, s: u32) -> f64 {
         .expect("invalid time passed to ymd_hms()")
         .and_utc()
         .timestamp() as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression (PR #101 follow-up): the phantom-tick extrapolation used to
+    // guess the next/previous major from a fixed timestamp delta between the
+    // outermost real tick pair, which is wrong for calendar units whose
+    // length varies (a month is 28-31 days). `tick_after`/`tick_before` must
+    // instead step by the actual calendar unit.
+
+    #[test]
+    fn tick_after_month_crosses_into_march_not_31_days_later() {
+        let dt = DateTimeAxis::months("%Y-%m-%d");
+        let feb_1 = ymd(2025, 2, 1);
+        assert_eq!(
+            dt.tick_after(feb_1),
+            ymd(2025, 3, 1),
+            "one month after Feb 1 is Mar 1, not Feb 1 + 31 days"
+        );
+    }
+
+    #[test]
+    fn tick_before_month_crosses_out_of_a_short_month() {
+        let dt = DateTimeAxis::months("%Y-%m-%d");
+        let mar_1 = ymd(2025, 3, 1);
+        assert_eq!(
+            dt.tick_before(mar_1),
+            ymd(2025, 2, 1),
+            "one month before Mar 1 is Feb 1, not Mar 1 - 31 days"
+        );
+    }
+
+    #[test]
+    fn tick_after_year_handles_leap_years() {
+        let dt = DateTimeAxis::years("%Y");
+        assert_eq!(dt.tick_after(ymd(2024, 1, 1)), ymd(2025, 1, 1));
+        assert_eq!(
+            dt.tick_after(ymd(2023, 1, 1)),
+            ymd(2024, 1, 1),
+            "one year after Jan 1 2023 is Jan 1 2024, crossing into a leap year"
+        );
+    }
+
+    #[test]
+    fn tick_after_before_day_step_matches_fixed_delta() {
+        // Day/week/hour/etc. units DO have a fixed-length step, so this
+        // should behave identically to simple arithmetic for them.
+        let dt = DateTimeAxis::days("%Y-%m-%d");
+        let d = ymd(2025, 6, 15);
+        assert_eq!(dt.tick_after(d), d + 86_400.0);
+        assert_eq!(dt.tick_before(d), d - 86_400.0);
+    }
 }

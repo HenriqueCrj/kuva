@@ -68,7 +68,7 @@ pub fn run(args: LollipopArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -129,6 +129,22 @@ pub fn run(args: LollipopArgs) -> Result<(), String> {
         for (x, y) in xs.iter().zip(ys.iter()) {
             plot = plot.with_point(*x, *y);
         }
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::LollipopPlot"],
+                "Lollipop",
+                &[crate::emit_code::emit_lollipop_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Lollipop(plot)];

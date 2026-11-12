@@ -1,7 +1,11 @@
 mod common;
 use kuva::backend::svg::SvgBackend;
 use kuva::plot::{LinePlot, ScatterPlot};
-use kuva::render::{layout::Layout, plots::Plot, render::render_multiple};
+use kuva::render::{
+    layout::{ComputedLayout, Layout},
+    plots::Plot,
+    render::render_multiple,
+};
 
 fn scatter_svg(layout: Layout) -> String {
     // Simple scatter: two points giving x in [0,13], y in [0,5]
@@ -363,7 +367,7 @@ fn test_generate_ticks_small_scale_bounded() {
     // All tick values must be within the axis range
     for &t in &ticks {
         assert!(
-            t >= 1e-14 * 0.999 && t <= 2e-14 * 1.001,
+            (1e-14 * 0.999..=2e-14 * 1.001).contains(&t),
             "tick {t} is outside expected range [1e-14, 2e-14]"
         );
     }
@@ -386,4 +390,51 @@ fn test_line_plot_small_values_svg_size() {
         "LinePlot with 1e-14 y-values should produce a small SVG (<100 KB), got {} bytes",
         svg.len()
     );
+}
+
+/// Regression (issue #98): data whose max already lands exactly on a "nice"
+/// tick must not have the axis rounded out to a whole extra major tick just
+/// because of the small breathing-room pad — that can inflate the range by
+/// 15-25%+ for an axis with few, large-value ticks. Data 0..20 (step-5 grid)
+/// used to round out to (0, 25); it must now stay within 5% of (0, 20).
+#[test]
+fn test_axis_range_does_not_over_provision_when_max_lands_on_a_tick() {
+    let data: Vec<(f64, f64)> = (0..=20).map(|i| (i as f64, (i as f64).sin())).collect();
+    let plot = LinePlot::new().with_data(data);
+    let plots = vec![Plot::Line(plot)];
+    let layout = Layout::auto_from_plots(&plots);
+    let computed = ComputedLayout::from_layout(&layout);
+
+    assert_eq!(computed.x_range.0, 0.0);
+    assert!(
+        computed.x_range.1 <= 21.0 + 1e-9,
+        "x_range.1 should be capped near 21.0 (20 + 5% of the 20-unit span), got {}",
+        computed.x_range.1
+    );
+    assert!(
+        computed.x_range.1 < 25.0,
+        "x_range.1 must not round out to a whole extra major tick (25.0), got {}",
+        computed.x_range.1
+    );
+
+    let svg = SvgBackend.render_scene(&render_multiple(plots, layout));
+    common::write_test_output("test_outputs/tick_control_no_overprovision.svg", &svg).unwrap();
+    assert!(
+        !svg.contains(">25<"),
+        "the dead-space tick from the old over-provisioned range must not appear"
+    );
+}
+
+/// Regression (issue #98): when the data's max does NOT land on a nice tick,
+/// ordinary nice-rounding already provides natural headroom and must be
+/// completely unaffected by the issue #98 cap.
+#[test]
+fn test_axis_range_natural_overshoot_is_unaffected() {
+    let data: Vec<(f64, f64)> = (0..=17).map(|i| (i as f64, (i as f64).sin())).collect();
+    let plot = LinePlot::new().with_data(data);
+    let plots = vec![Plot::Line(plot)];
+    let layout = Layout::auto_from_plots(&plots);
+    let computed = ComputedLayout::from_layout(&layout);
+
+    assert_eq!(computed.x_range, (0.0, 17.5));
 }

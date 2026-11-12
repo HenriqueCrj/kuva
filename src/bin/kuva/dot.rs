@@ -64,7 +64,7 @@ pub fn run(args: DotArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -99,6 +99,22 @@ pub fn run(args: DotArgs) -> Result<(), String> {
     }
     if let Some(ref label) = args.colorbar {
         plot = plot.with_colorbar(label.clone());
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::DotPlot", "kuva::plot::ColorMap"],
+                "DotPlot",
+                &[crate::emit_code::emit_dot_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::DotPlot(plot)];

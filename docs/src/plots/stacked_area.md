@@ -162,3 +162,34 @@ let sa = StackedAreaPlot::new()
 | `.with_strokes(bool)` | Show/hide top-edge strokes (default `true`) |
 | `.with_normalized()` | Enable 100 % percent-stacking |
 | `.with_legend_position(pos)` | Any [`LegendPosition`](../reference/layout.md#legend) variant (default `OutsideRightTop`) |
+
+**See also:** [Streamgraph](./streamgraph.md) for a zero-centered alternative, [Waterfall Chart](./waterfall.md) for running-total (non-stacked) data.
+
+---
+
+## CLI
+
+Stacked area chart in long format.
+
+**Input:** three columns — x value, group label, y value — one observation per row. Rows are grouped by the group column; within each group the x/y pairs are collected in order.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--x-col <COL>` | `0` | X-axis column |
+| `--group-col <COL>` | `1` | Series group column |
+| `--y-col <COL>` | `2` | Y-axis column |
+| `--normalize` | off | Normalize each x-position to 100 % |
+| `--fill-opacity <F>` | `0.7` | Fill opacity for each band |
+
+```bash
+kuva stacked-area stacked_area.tsv \
+    --x-col week --group-col species --y-col abundance
+
+kuva stacked-area stacked_area.tsv \
+    --x-col week --group-col species --y-col abundance \
+    --normalize --y-label "Relative abundance (%)"
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes, log scale.*

@@ -87,15 +87,6 @@ let svg = SvgBackend.render_scene(&render_multiple(plots, layout));
 
 ---
 
-## CLI
-
-```bash
-kuva ridgeline samples.tsv --group-by group --value expression \
-    --title "Ridgeline" --x-label "Expression"
-```
-
----
-
 ## Builder reference
 
 | Method | Default | Description |
@@ -112,3 +103,35 @@ kuva ridgeline samples.tsv --group-by group --value expression \
 | `.with_normalize(bool)` | `false` | Use PDF normalization instead of visual scaling |
 | `.with_legend(bool)` | `false` | Show a legend (y-axis labels are usually sufficient) |
 | `.with_line_dash(str)` | — | SVG stroke-dasharray for dashed outline |
+
+**See also:** [Density Plot](./density.md) for a single-group curve, [Violin Plot](./violin.md) for a categorical alternative, [Box Plot](./boxplot.md) for a quantile summary instead of the full curve.
+
+---
+
+## CLI
+
+**Input:** a tabular file with at least one numeric column and an optional group column.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--value <COL>` | `0` | Column of numeric values |
+| `--y <COL>[,<COL>…]` | — | Comma-separated columns; plots one ridge per column (column name = ridge label). Mutually exclusive with `--group-by` when 2+ columns given |
+| `--group-by <COL>` | — | Group by this column; one ridge per unique value |
+| `--filled` | on | Fill the area under each ridge curve |
+| `--opacity <F>` | `0.7` | Fill opacity |
+| `--overlap <F>` | `0.5` | Ridge overlap factor (0 = no overlap, 1 = full cell height) |
+| `--bandwidth <F>` | *(Silverman)* | KDE bandwidth override |
+
+```bash
+kuva ridgeline samples.tsv --group-by group --value expression \
+    --x-label "Expression" --y-label "Group" --title "Expression by group"
+
+kuva ridgeline samples.tsv --group-by group --value expression --overlap 1.0
+
+# multi-column: one ridge per column
+kuva ridgeline data.tsv --y col_a,col_b,col_c --overlap 0.3
+```
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes.*

@@ -352,7 +352,7 @@ fn test_twin_y_showcase() {
     let reported_bq: Vec<(f64, f64)> = (1..=20_u32)
         .map(|i| {
             let gc = i as f64 * 5.0;
-            let bq = if gc < 15.0 || gc > 85.0 {
+            let bq = if !(15.0..=85.0).contains(&gc) {
                 22.0 - (gc - 50.0).abs() * 0.3
             } else {
                 29.5 - (gc - 50.0).abs() * 0.025
@@ -365,7 +365,7 @@ fn test_twin_y_showcase() {
     let empirical_bq: Vec<(f64, f64)> = (1..=20_u32)
         .map(|i| {
             let gc = i as f64 * 5.0;
-            let bq = if gc < 15.0 || gc > 85.0 {
+            let bq = if !(15.0..=85.0).contains(&gc) {
                 10.0 - (gc - 50.0).abs() * 0.1
             } else {
                 15.0 - (gc - 50.0).abs() * 0.01
@@ -423,4 +423,35 @@ fn test_twin_y_showcase() {
         svg.contains("<rect"),
         "SVG should contain histogram bars for Genome GC"
     );
+}
+
+// `Layout::auto_from_twin_y_plots` builds the x-range from `primary` first, then
+// `with_y2_auto(secondary)` unions in secondary's bounds. `data_x_range` (the *raw*,
+// unpadded extent used by the #98 capped-margin check in `resolve_axis_range`) used to
+// stay pinned to primary's raw extent even after that union, so a secondary series
+// extending further on x than primary could get the x-axis max rounded down to primary's
+// raw max instead of secondary's — clipping secondary's data off the plot. Chosen so
+// primary's raw max (20) lands exactly on a nice tick, which is what triggers the capped
+// branch of `auto_nice_range_capped`.
+#[test]
+fn test_twin_y_x_range_covers_secondary_when_it_extends_past_primary() {
+    let primary = vec![Plot::Line(
+        LinePlot::new().with_data((0..=20).map(|i| (i as f64, i as f64))),
+    )];
+    let secondary = vec![Plot::Line(
+        LinePlot::new().with_data((0..=23).map(|i| (i as f64, i as f64 * 2.0))),
+    )];
+
+    let layout = Layout::auto_from_twin_y_plots(&primary, &secondary);
+    let computed = ComputedLayout::from_layout(&layout);
+    assert!(
+        computed.x_range.1 >= 23.0,
+        "x-axis max ({}) should cover secondary's data up to x=23, not be rounded down to \
+         primary's raw max",
+        computed.x_range.1
+    );
+
+    let scene = render_twin_y(primary, secondary, layout);
+    let svg = SvgBackend.render_scene(&scene);
+    common::write_test_output("test_outputs/twin_y_x_range_secondary.svg", svg).unwrap();
 }

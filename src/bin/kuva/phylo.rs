@@ -84,7 +84,7 @@ pub fn run(args: PhyloArgs) -> Result<(), String> {
     } else {
         let table = DataTable::parse(
             args.input.input.as_deref(),
-            args.input.no_header,
+            args.input.header_mode(),
             args.input.delimiter,
             &proj,
         )?;
@@ -124,6 +124,27 @@ pub fn run(args: PhyloArgs) -> Result<(), String> {
     }
     if let Some(ref label) = args.legend {
         tree = tree.with_legend(label.clone());
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::PhyloTree",
+                    "kuva::plot::PhyloNode",
+                    "kuva::plot::TreeOrientation",
+                    "kuva::plot::TreeBranchStyle",
+                ],
+                "PhyloTree",
+                &[crate::emit_code::emit_phylo_tree(&tree)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::PhyloTree(tree)];

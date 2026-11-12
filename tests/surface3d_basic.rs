@@ -1,6 +1,7 @@
 mod common;
 use kuva::backend::svg::SvgBackend;
 use kuva::plot::heatmap::ColorMap;
+use kuva::plot::scatter3d::Scatter3DPlot;
 use kuva::plot::surface3d::Surface3DPlot;
 use kuva::render::layout::Layout;
 use kuva::render::plots::Plot;
@@ -219,5 +220,42 @@ fn test_surface3d_with_data_fn_low_vs_high_res() {
         "high-res ({} bytes) should be much larger than low-res ({} bytes)",
         svg_high.len(),
         svg_low.len()
+    );
+}
+
+// Mixing a Scatter3D and a Surface3D in one panel used to have each draw its own
+// wireframe box independently (same underlying bug as combining multiple
+// Scatter3D instances — see scatter3d_basic.rs). The back-pane fill count is a
+// range-independent invariant for detecting a doubled box: which faces are
+// "back-facing" (and so get a translucent fill) depends only on the view
+// angles, never on data range, so it must be identical whether one or several
+// 3D plots share the box.
+#[test]
+fn test_scatter3d_and_surface3d_share_one_box() {
+    let scatter = Scatter3DPlot::new().with_data(vec![(0.0, 0.0, 20.0), (1.0, 1.0, 25.0)]);
+    let surface = Surface3DPlot::new(paraboloid_grid(10));
+
+    let mixed_plots = vec![Plot::Scatter3D(scatter), Plot::Surface3D(surface.clone())];
+    let mixed_layout = Layout::auto_from_plots(&mixed_plots);
+    let mixed_svg = SvgBackend.render_scene(&render_multiple(mixed_plots, mixed_layout));
+    common::write_test_output(
+        "test_outputs/surface3d_mixed_with_scatter3d.svg",
+        mixed_svg.clone(),
+    )
+    .unwrap();
+
+    let solo_plots = vec![Plot::Surface3D(surface)];
+    let solo_layout = Layout::auto_from_plots(&solo_plots);
+    let solo_svg = SvgBackend.render_scene(&render_multiple(solo_plots, solo_layout));
+
+    let pane_fill_count = |svg: &str| svg.matches("opacity=\"0.15\"").count();
+    let mixed_panes = pane_fill_count(&mixed_svg);
+    let solo_panes = pane_fill_count(&solo_svg);
+    assert!(mixed_panes > 0, "expected at least one back-pane fill");
+    assert_eq!(
+        mixed_panes, solo_panes,
+        "a Scatter3D combined with a Surface3D should still draw exactly one box \
+         (same back-pane-fill count, {solo_panes}, as the Surface3D alone) — got \
+         {mixed_panes}, which would indicate the box was drawn twice"
     );
 }

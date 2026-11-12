@@ -165,3 +165,9 @@ kuva scatter3d data.tsv --x x --y y --z z \
 | `--no-box` | box on | Hide wireframe bounding box |
 | `--grid-lines <N>` | `5` | Grid/tick divisions per axis |
 | `--z-axis-left` | auto | Force Z axis to the left side |
+
+**See also:** [3D Surface Plot](./surface3d.md) for a continuous surface instead of points, [Scatter Plot](./scatter.md) for the 2D equivalent.
+
+---
+
+*See also: [Shared flags](../cli/index.md#shared-flags) — output, appearance, axes.*

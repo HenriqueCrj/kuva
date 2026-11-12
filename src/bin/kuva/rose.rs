@@ -87,7 +87,7 @@ pub fn run(args: RoseArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -179,6 +179,26 @@ pub fn run(args: RoseArgs) -> Result<(), String> {
 
     if args.compass {
         plot = plot.with_compass_labels();
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::RosePlot",
+                    "kuva::plot::RoseMode",
+                    "kuva::plot::RoseEncoding",
+                ],
+                "Rose",
+                &[crate::emit_code::emit_rose_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Rose(plot)];

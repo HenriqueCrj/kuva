@@ -66,7 +66,7 @@ pub fn run(args: TernaryArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -98,6 +98,22 @@ pub fn run(args: TernaryArgs) -> Result<(), String> {
         for ((a, b), c) in a_vals.iter().zip(b_vals.iter()).zip(c_vals.iter()) {
             plot = plot.with_point(*a, *b, *c);
         }
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &["kuva::plot::TernaryPlot"],
+                "Ternary",
+                &[crate::emit_code::emit_ternary_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Ternary(plot)];

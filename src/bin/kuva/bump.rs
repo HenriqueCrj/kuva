@@ -6,7 +6,7 @@ use kuva::render::plots::Plot;
 use kuva::render::render::render_multiple;
 
 use crate::data::{ColSpec, DataTable, InputArgs};
-use crate::layout_args::{apply_base_args, AxisArgs, BaseArgs};
+use crate::layout_args::{apply_axis_args, apply_base_args, AxisArgs, BaseArgs};
 use crate::output::write_output;
 
 /// Bump chart — rank of named series across discrete time points or conditions.
@@ -113,7 +113,7 @@ pub fn run(args: BumpArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -206,19 +206,31 @@ pub fn run(args: BumpArgs) -> Result<(), String> {
         bp = bp.with_highlight(hl);
     }
 
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::BumpPlot",
+                    "kuva::plot::bump::CurveStyle",
+                    "kuva::plot::bump::BumpTieBreak",
+                ],
+                "Bump",
+                &[crate::emit_code::emit_bump_plot(&bp)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
+    }
+
     // ── Layout and render ─────────────────────────────────────────────────────
     let plots = vec![Plot::Bump(bp)];
     let mut layout = Layout::auto_from_plots(&plots);
     layout = apply_base_args(layout, &args.base);
-    if let Some(xl) = args.axis.x_label {
-        layout = layout.with_x_label(xl);
-    }
-    if let Some(yl) = args.axis.y_label {
-        layout = layout.with_y_label(yl);
-    }
-    if args.axis.no_grid {
-        layout = layout.with_show_grid(false);
-    }
+    layout = apply_axis_args(layout, &args.axis);
 
     let scene = render_multiple(plots, layout);
     write_output(scene, &args.base)

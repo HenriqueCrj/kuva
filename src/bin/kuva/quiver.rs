@@ -119,7 +119,7 @@ pub fn run(args: QuiverArgs) -> Result<(), String> {
     ];
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -192,6 +192,26 @@ pub fn run(args: QuiverArgs) -> Result<(), String> {
     }
     if let Some(p) = args.pivot {
         plot = plot.with_pivot(p.into());
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::QuiverPlot",
+                    "kuva::plot::QuiverPivot",
+                    "kuva::plot::ColorMap",
+                ],
+                "Quiver",
+                &[crate::emit_code::emit_quiver_plot(&plot)],
+                &args.base,
+                Some(&args.axis),
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Quiver(plot)];

@@ -42,6 +42,19 @@ pub struct BoxPlot {
     pub overlay_size: f64,
     pub overlay_seed: u64,
     pub horizontal: bool,
+    /// Draw a notch around the median indicating the approximate 95% CI on
+    /// the median (McGill et al. formula: `1.58 * IQR / sqrt(n)`).
+    pub notch: bool,
+    /// How far the notch cuts inward from each side edge toward the box's
+    /// center, as a fraction of the half box width (default `0.3`). `1.0`
+    /// cuts all the way to the center (a full bowtie); `0.0` disables the
+    /// inward cut entirely (a flat-sided notch).
+    pub notch_depth: f64,
+    /// Scale factor applied to the statistical notch half-width formula
+    /// (`1.58 * IQR / sqrt(n)`), controlling how far the notch extends above
+    /// and below the median (default `0.4`). `1.0` uses the McGill et al.
+    /// formula unscaled.
+    pub notch_width: f64,
 }
 
 /// A single group (one box) with a category label and raw values.
@@ -73,6 +86,9 @@ impl BoxPlot {
             overlay_size: 3.0,
             overlay_seed: 42,
             horizontal: false,
+            notch: false,
+            notch_depth: 0.3,
+            notch_width: 0.4,
         }
     }
 
@@ -187,6 +203,40 @@ impl BoxPlot {
     /// Render groups along the Y-axis and data values along the X-axis (default `false`).
     pub fn with_horizontal(mut self, h: bool) -> Self {
         self.horizontal = h;
+        self
+    }
+
+    /// Draw a notch around the median (default `false`).
+    ///
+    /// The notch half-width is `1.58 * IQR / sqrt(n)`, an approximate 95%
+    /// confidence interval on the median (McGill, Tukey & Larsen 1978),
+    /// scaled down by [`.with_notch_width()`](Self::with_notch_width) and
+    /// clamped so it never crosses the opposite hinge. The inward cut depth
+    /// is controlled separately by
+    /// [`.with_notch_depth()`](Self::with_notch_depth) — by default the
+    /// notch does not reach the box's center.
+    /// Non-overlapping notches between two boxes are a visual heuristic for
+    /// "medians likely differ"; overlapping notches don't rule it out.
+    pub fn with_notch(mut self, notch: bool) -> Self {
+        self.notch = notch;
+        self
+    }
+
+    /// Set how far the notch cuts inward from each side edge, as a fraction
+    /// of the half box width (default `0.3`). `1.0` cuts all the way to the
+    /// center (a full bowtie shape); `0.0` disables the inward cut.
+    pub fn with_notch_depth(mut self, frac: f64) -> Self {
+        self.notch_depth = frac.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Set a scale factor on the statistical notch half-width formula
+    /// (`1.58 * IQR / sqrt(n)`), controlling how far the notch extends above
+    /// and below the median (default `0.4`). `1.0` uses the McGill et al.
+    /// formula unscaled — often close to or past the opposite hinge for
+    /// small `n`, since the clamp only guarantees it won't cross it.
+    pub fn with_notch_width(mut self, scale: f64) -> Self {
+        self.notch_width = scale.max(0.0);
         self
     }
 }

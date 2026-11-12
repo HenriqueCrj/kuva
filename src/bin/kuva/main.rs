@@ -5,12 +5,15 @@ mod calendar;
 mod candlestick;
 mod chord;
 mod contour;
+mod coverage;
 mod data;
 mod density;
 #[cfg(feature = "doom")]
 mod doom;
 mod dot;
 mod ecdf;
+#[cfg(feature = "emit_code")]
+mod emit_code;
 mod forest;
 mod funnel;
 mod gantt;
@@ -27,6 +30,7 @@ mod mosaic;
 mod network;
 mod output;
 mod parallel;
+mod pareto;
 mod phylo;
 mod pie;
 mod polar;
@@ -52,6 +56,7 @@ mod survival;
 mod synteny;
 mod ternary;
 mod treemap;
+mod twin_y;
 mod upset;
 mod venn;
 mod violin;
@@ -153,6 +158,8 @@ enum Commands {
     Horizon(horizon::HorizonArgs),
     /// Parallel coordinates plot — multivariate comparison.
     Parallel(parallel::ParallelArgs),
+    /// Pareto chart — bars sorted descending, with a cumulative-percentage line.
+    Pareto(pareto::ParetoArgs),
     /// Venn diagram — 2–4 set overlaps.
     Venn(venn::VennArgs),
     /// Calendar heatmap — GitHub-style contribution grid.
@@ -161,6 +168,11 @@ enum Commands {
     Gantt(gantt::GanttArgs),
     /// Quiver plot — 2-D vector field rendered as arrows.
     Quiver(quiver::QuiverArgs),
+    /// Twin-Y (dual-axis) plot — two series sharing an x-axis with independent y-scales.
+    #[command(name = "twin-y")]
+    TwinY(twin_y::TwinYArgs),
+    /// Genomic coverage plot — stacked depth tracks + variants + feature bands on a shared locus.
+    Coverage(coverage::CoverageArgs),
     #[cfg(feature = "doom")]
     /// Generate a self-contained DOOM SVG playable in any browser.
     Doom(doom::DoomArgs),
@@ -229,10 +241,13 @@ fn main() {
         Commands::Survival(args) => survival::run(args),
         Commands::Horizon(args) => horizon::run(args),
         Commands::Parallel(args) => parallel::run(args),
+        Commands::Pareto(args) => pareto::run(args),
         Commands::Venn(args) => venn::run(args),
         Commands::Calendar(args) => calendar::run(args),
         Commands::Gantt(args) => gantt::run(args),
         Commands::Quiver(args) => quiver::run(args),
+        Commands::TwinY(args) => twin_y::run(args),
+        Commands::Coverage(args) => coverage::run(args),
         #[cfg(feature = "doom")]
         Commands::Doom(args) => doom::run(args),
         Commands::Man => unreachable!(),

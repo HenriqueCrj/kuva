@@ -9,9 +9,9 @@
 ![conda](https://anaconda.org/conda-forge/kuva/badges/version.svg)
 ![conda-downloads](https://anaconda.org/conda-forge/kuva/badges/downloads.svg)
 
-A scientific plotting library in Rust. 60 plot types, SVG output, optional PNG/PDF and native Dioxus (RSX) backends, and a CLI binary that renders plots directly from the shell — including in the terminal itself.
+A scientific plotting library in Rust. 64 plot types, SVG output, optional PNG/PDF and native Dioxus (RSX) backends, and a CLI binary that renders plots directly from the shell — including in the terminal itself.
 
-![All 60 plot types](https://raw.githubusercontent.com/Psy-Fer/kuva/main/docs/src/assets/overview/all_plots_complex.svg)
+![All 64 plot types](https://raw.githubusercontent.com/Psy-Fer/kuva/main/docs/src/assets/overview/all_plots_complex.svg)
 
 ![kuva terminal — Sankey diagram](https://raw.githubusercontent.com/Psy-Fer/kuva/main/docs/src/assets/terminal/sankey.gif)
 
@@ -50,14 +50,20 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-kuva = "0.3"
+kuva = "0.6"
 
 # Optional backends
-kuva = { version = "0.3", features = ["png"] }   # PNG output
-kuva = { version = "0.3", features = ["pdf"] }   # PDF output
-kuva = { version = "0.3", features = ["full"] }  # PNG + PDF
-kuva = { version = "0.3", features = ["dioxus"] } # Native Dioxus (RSX) backend
+kuva = { version = "0.6", features = ["png"] }   # PNG output
+kuva = { version = "0.6", features = ["pdf"] }   # PDF output — requires Rust >= 1.92 (higher than kuva's own MSRV; see below)
+kuva = { version = "0.6", features = ["full"] }  # PNG + PDF
+kuva = { version = "0.6", features = ["dioxus"] } # Native Dioxus (RSX) backend
+
+# Opt-in extras (deliberately not in `full`)
+kuva = { version = "0.6", features = ["typst-math"] }  # typeset $...$ math via the Typst compiler — requires Rust >= 1.89
+kuva = { version = "0.6", features = ["typst"] }       # emit .typ markup for external `typst compile`
 ```
+
+> **Note on the `pdf` feature's Rust version:** kuva's own MSRV is 1.87, but the `pdf` feature depends on [`krilla`](https://github.com/LaurenzV/krilla) (the maintained successor to the now-archived `svg2pdf`), which requires Rust >= 1.92. This isn't reflected in kuva's crate-level `rust-version` — doing so would force every kuva user, including ones who never enable `pdf`, onto the newer toolchain via Cargo's rust-version-aware dependency resolver. If you don't enable `pdf`/`full`, kuva itself still only needs Rust 1.87.
 
 Then in Rust:
 
@@ -95,7 +101,7 @@ kuva ridgeline samples.tsv --group-by group --value expression --overlap 0.6
 kuva box samples.tsv --group-col group --value-col expression --terminal
 ```
 
-Input is auto-detected TSV or CSV. Columns are selectable by name or 0-based index. Pipe from stdin by omitting the file argument. Output defaults to SVG on stdout; use `-o file.svg/png/pdf` to write a file.
+Input is auto-detected TSV or CSV. `.parquet` files are also supported. Columns are selectable by name or 0-based index. Pipe from stdin by omitting the file argument. Output defaults to SVG on stdout; use a `.svg`, `.png`, or `.pdf` extension with `-o` to write a file. Extensions are case-insensitive, and other extensions are rejected.
 
 ---
 

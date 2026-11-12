@@ -353,3 +353,134 @@ fn test_bar_horizontal_stacked() {
     assert!(svg.contains("Alpha"));
     assert!(svg.contains("Beta"));
 }
+
+// `clamp_axis` (and `clamp_y_axis`, which shares the same code path for the
+// y-axis) must never override a categorical axis's exact [0.5, n+0.5] slot
+// extent — e.g. a normalized Histogram sharing a panel with a horizontal Bar
+// chart sets `clamp_y_axis` on the shared layout, but the bar chart's own
+// categorical y-axis must still win. `with_clamp_axis()` triggers the same
+// code path directly and deterministically, without depending on how a
+// Histogram's bounds() happens to be aggregated alongside a Bar's.
+#[test]
+fn test_clamp_axis_does_not_override_categorical_axis_extent() {
+    // 20 bars matches PR #99's own motivating example ([0.5, 20.5] getting
+    // nice-rounded outward to [0, 22]/[0, 25]) — a 3-bar range happens to
+    // already sit on a "nice" step boundary and wouldn't distinguish the bug.
+    let mut bar = BarPlot::new();
+    for i in 1..=20 {
+        bar = bar.with_bar(format!("Cat{i}"), i as f64);
+    }
+
+    let plots = vec![Plot::Bar(bar)];
+    let layout = Layout::auto_from_plots(&plots).with_clamp_axis();
+    let computed = ComputedLayout::from_layout(&layout);
+
+    assert_eq!(
+        computed.x_range,
+        (0.5, 20.5),
+        "categorical x-axis must keep its exact slot extent even when \
+         clamp_axis is also set (got {:?})",
+        computed.x_range
+    );
+}
+
+// ── Error bars ────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_bar_symmetric_error_bars() {
+    let plot = BarPlot::new()
+        .with_bars(vec![
+            ("Control", 42.0),
+            ("Treated", 58.0),
+            ("Placebo", 31.0),
+        ])
+        .with_color("steelblue")
+        .with_error(vec![3.0, 5.0, 2.0]);
+
+    let plots = vec![Plot::Bar(plot)];
+    let layout = Layout::auto_from_plots(&plots)
+        .with_title("Bar Plot with Symmetric Error Bars")
+        .with_y_label("Value");
+    let svg = SvgBackend.render_scene(&render_multiple(plots, layout));
+    common::write_test_output("test_outputs/bar_error_symmetric.svg", svg.clone()).unwrap();
+
+    assert!(svg.contains("<svg"));
+    // 3 bars + 3 whisker lines + 6 cap lines = at least 9 <line> elements
+    let line_count = svg.matches("<line").count();
+    assert!(
+        line_count >= 9,
+        "expected at least 9 <line> elements for 3 whiskers+caps, got {line_count}"
+    );
+}
+
+#[test]
+fn test_bar_asymmetric_error_bars() {
+    let plot = BarPlot::new()
+        .with_bars(vec![("A", 20.0), ("B", 35.0)])
+        .with_color("tomato")
+        .with_asymmetric_error(vec![(2.0, 6.0), (4.0, 1.0)])
+        .with_error_color("black");
+
+    let plots = vec![Plot::Bar(plot)];
+    let layout = Layout::auto_from_plots(&plots)
+        .with_title("Bar Plot with Asymmetric Error Bars")
+        .with_y_label("Value");
+    let svg = SvgBackend.render_scene(&render_multiple(plots, layout));
+    common::write_test_output("test_outputs/bar_error_asymmetric.svg", svg.clone()).unwrap();
+
+    assert!(svg.contains("<svg"));
+    // Upper whisker extent (35+1=36) should clear the axis without clipping;
+    // the bounds() max must include it, so the y-axis top tick should exceed 35.
+    assert!(svg.contains("<line"));
+}
+
+#[test]
+fn test_bar_error_bars_grouped_horizontal() {
+    let plot = BarPlot::new()
+        .with_group("Q1", vec![(30.0, "steelblue"), (20.0, "tomato")])
+        .with_group("Q2", vec![(45.0, "steelblue"), (35.0, "tomato")])
+        .with_legend(vec!["Product A", "Product B"])
+        .with_horizontal(true)
+        .with_error(vec![2.0, 3.0, 4.0, 1.5]);
+
+    let plots = vec![Plot::Bar(plot)];
+    let layout = Layout::auto_from_plots(&plots)
+        .with_title("Horizontal Grouped Bar with Error Bars")
+        .with_x_label("Revenue")
+        .with_y_label("Quarter");
+    let svg = SvgBackend.render_scene(&render_multiple(plots, layout));
+    common::write_test_output("test_outputs/bar_error_grouped_horizontal.svg", svg.clone())
+        .unwrap();
+
+    assert!(svg.contains("<svg"));
+    let line_count = svg.matches("<line").count();
+    assert!(
+        line_count >= 12,
+        "expected at least 12 <line> elements for 4 whiskers+caps, got {line_count}"
+    );
+}
+
+#[test]
+fn test_bar_error_bars_stacked() {
+    let plot = BarPlot::new()
+        .with_group(
+            "Alpha",
+            vec![(40.0, "steelblue"), (25.0, "tomato"), (15.0, "seagreen")],
+        )
+        .with_group(
+            "Beta",
+            vec![(30.0, "steelblue"), (35.0, "tomato"), (20.0, "seagreen")],
+        )
+        .with_legend(vec!["X", "Y", "Z"])
+        .with_stacked()
+        .with_error(vec![2.0, 3.0, 1.0, 2.5, 4.0, 1.5]);
+
+    let plots = vec![Plot::Bar(plot)];
+    let layout = Layout::auto_from_plots(&plots)
+        .with_title("Stacked Bar with Per-segment Error Bars")
+        .with_y_label("Value");
+    let svg = SvgBackend.render_scene(&render_multiple(plots, layout));
+    common::write_test_output("test_outputs/bar_error_stacked.svg", svg.clone()).unwrap();
+
+    assert!(svg.contains("<svg"));
+}

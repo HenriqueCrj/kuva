@@ -36,9 +36,10 @@ pub struct FunnelArgs {
     #[arg(long, default_value = "vertical")]
     pub orientation: String,
 
-    /// Bar color mode: `uniform` (default), `stage`, `gradient`.
-    #[arg(long, default_value = "uniform")]
-    pub color_by: String,
+    /// Bar color mode: `uniform` (default), `stage`, `gradient`. (This is a mode, not a
+    /// column selector; `--color-by` is kept as a hidden backward-compatible alias.)
+    #[arg(long = "color-mode", alias = "color-by", default_value = "uniform")]
+    pub color_mode: String,
 
     /// Hide trapezoidal connectors between bars.
     #[arg(long)]
@@ -85,7 +86,7 @@ pub fn run(args: FunnelArgs) -> Result<(), String> {
     }
     let table = DataTable::parse(
         args.input.input.as_deref(),
-        args.input.no_header,
+        args.input.header_mode(),
         args.input.delimiter,
         &proj,
     )?;
@@ -101,7 +102,7 @@ pub fn run(args: FunnelArgs) -> Result<(), String> {
         _ => FunnelOrientation::Vertical,
     };
 
-    let color_mode = match args.color_by.as_str() {
+    let color_mode = match args.color_mode.as_str() {
         "stage" | "by_stage" | "bystage" => FunnelColorMode::ByStage,
         "gradient" => FunnelColorMode::Gradient,
         _ => FunnelColorMode::Uniform,
@@ -143,6 +144,26 @@ pub fn run(args: FunnelArgs) -> Result<(), String> {
                 plot = plot.with_mirror_labels(ll.clone(), rl.clone());
             }
         }
+    }
+
+    #[cfg(feature = "emit_code")]
+    if args.base.emit_code {
+        print!(
+            "{}",
+            crate::emit_code::assemble(
+                &[
+                    "kuva::plot::FunnelPlot",
+                    "kuva::plot::FunnelOrientation",
+                    "kuva::plot::FunnelColorMode",
+                ],
+                "Funnel",
+                &[crate::emit_code::emit_funnel_plot(&plot)],
+                &args.base,
+                None,
+                None,
+            )
+        );
+        return Ok(());
     }
 
     let plots = vec![Plot::Funnel(plot)];

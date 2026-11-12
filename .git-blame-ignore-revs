@@ -1,0 +1,7 @@
+# Commits listed here are ignored by `git blame` (native support in GitHub's
+# web UI and IntelliJ; for local git, set `git config blame.ignoreRevsFile
+# .git-blame-ignore-revs` once). Only add commits that are pure, isolated
+# reformatting with no logic changes.
+
+# Repo-wide cargo fmt normalization (see issue #100)
+a8c8b9aa98a47b06a05f51d4f74e0799e236d86f

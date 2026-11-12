@@ -8,3 +8,5 @@ src = "src"
 [output.html]
 git-repository-url = "https://github.com/Psy-Fer/kuva"
 edit-url-template = "https://github.com/Psy-Fer/kuva/edit/main/docs/src/{path}"
+additional-css = ["theme/custom.css"]
+additional-js = ["theme/custom.js"]
